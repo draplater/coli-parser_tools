@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from logging import FileHandler
 
 from multiprocessing import Process, Pool
@@ -13,7 +15,7 @@ class MultipleTrainer(object):
         self.test = test
         self.train_func = train_func
         self.parser = parser
-        self.all_options = {}
+        self.all_options = OrderedDict()
 
     def add_options(self, title, options_dict, outdir_prefix=""):
         options_dict["title"] = title
