@@ -1,4 +1,6 @@
+from argparse import ArgumentParser
 from collections import OrderedDict
+from optparse import OptionParser
 
 from logging import FileHandler
 
@@ -20,7 +22,13 @@ class MultipleTrainer(object):
     def add_options(self, title, options_dict, outdir_prefix=""):
         options_dict["title"] = title
         options_dict["outdir"] = outdir_prefix + "model-" + title
-        options, args = parse_dict(self.parser, options_dict)
+        if isinstance(self.parser, OptionParser):
+            # For older parser interface
+            options, args = parse_dict(self.parser, options_dict)
+        else:
+            assert isinstance(self.parser, ArgumentParser)
+            options = parse_dict(self.parser, options_dict, ["train"])
+            self.train_func = options.func
         self.all_options[title] = options
 
     def run_parallel(self):
