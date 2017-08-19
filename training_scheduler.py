@@ -4,13 +4,16 @@ from optparse import OptionParser
 
 from logging import FileHandler
 
-from multiprocessing import Process, Pool
+from multiprocessing import Process
 
 from common_utils import parse_dict
 from logger import logger
 
 
-class MultipleTrainer(object):
+class TrainingScheduler(object):
+    """
+    Run multiple instance of trainer.
+    """
     def __init__(self, train_func, parser, train=None, dev=None, test=None):
         self.train = train
         self.dev = dev
