@@ -35,6 +35,10 @@ class TrainingScheduler(object):
         self.all_options[title] = options
 
     def run_parallel(self):
+        if len(self.all_options) == 1:
+            self.run()
+            return
+
         processes = {}
         for title, options in self.all_options.items():
             print("Training " + title)
