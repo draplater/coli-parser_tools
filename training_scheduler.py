@@ -6,6 +6,8 @@ from logging import FileHandler
 
 from multiprocessing import Process
 
+import os
+
 from common_utils import parse_dict
 from logger import logger
 
@@ -24,7 +26,7 @@ class TrainingScheduler(object):
 
     def add_options(self, title, options_dict, outdir_prefix=""):
         options_dict["title"] = title
-        options_dict["outdir"] = outdir_prefix + "model-" + title
+        options_dict["outdir"] = os.path.join(outdir_prefix, "model-" + title)
         if isinstance(self.parser, OptionParser):
             # For older parser interface
             options, args = parse_dict(self.parser, options_dict)
