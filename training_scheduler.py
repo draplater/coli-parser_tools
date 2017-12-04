@@ -1,6 +1,5 @@
-from argparse import ArgumentParser
+from argparse import Namespace
 from collections import OrderedDict
-from optparse import OptionParser
 
 from logging import FileHandler
 
@@ -8,32 +7,71 @@ from multiprocessing import Process
 
 import os
 
-from common_utils import parse_dict
 from logger import logger
+
+
+def dict_to_commandline(dic, prefix=()):
+    option_cmd = list(prefix)
+    for k, v in dic.items():
+        assert isinstance(k, str)
+        if v is True:
+            option_cmd.append("--" + k)
+        elif v is False:
+            continue
+        else:
+            option_cmd.append("--" + k)
+            if isinstance(v, list):
+                option_cmd.extend(str(i) for i in v)
+            else:
+                option_cmd.append(str(v))
+
+    return option_cmd
+
+
+def parse_cmd_multistage(dep_parser_class, cmd):
+    namespace = Namespace()
+    arg_parser = dep_parser_class.get_arg_parser()
+    _, rest_cmd = arg_parser.parse_known_args(cmd, namespace)
+    stage = 1
+    while True:
+        next_arg_parser = dep_parser_class.get_next_arg_parser(stage, namespace)
+        if next_arg_parser is None:
+            if rest_cmd:
+                try:
+                    from gettext import gettext as _
+                except ImportError:
+                    def _(message):
+                        return message
+                msg = _('unrecognized arguments: %s')
+                arg_parser.error(msg % ' '.join(rest_cmd))
+            else:
+                return namespace
+        stage += 1
+        _, rest_cmd = next_arg_parser.parse_known_args(rest_cmd, namespace)
+        arg_parser = next_arg_parser
+
+
+def parse_dict_multistage(dep_parser_class, dic, prefix=()):
+    return parse_cmd_multistage(dep_parser_class, dict_to_commandline(dic, prefix))
 
 
 class TrainingScheduler(object):
     """
     Run multiple instance of trainer.
     """
-    def __init__(self, train_func, parser, train=None, dev=None, test=None):
+    def __init__(self, train_func, dep_parser_class, train=None, dev=None, test=None):
         self.train = train
         self.dev = dev
         self.test = test
         self.train_func = train_func
-        self.parser = parser
+        self.dep_parser_class = dep_parser_class
         self.all_options = OrderedDict()
 
     def add_options(self, title, options_dict, outdir_prefix=""):
         options_dict["title"] = title
         options_dict["outdir"] = os.path.join(outdir_prefix, "model-" + title)
-        if isinstance(self.parser, OptionParser):
-            # For older parser interface
-            options, args = parse_dict(self.parser, options_dict)
-        else:
-            assert isinstance(self.parser, ArgumentParser)
-            options = parse_dict(self.parser, options_dict, ["train"])
-            self.train_func = options.func
+        options = parse_dict_multistage(self.dep_parser_class, options_dict, ["train"])
+        self.train_func = options.func
         self.all_options[title] = options
 
     def run_parallel(self):
