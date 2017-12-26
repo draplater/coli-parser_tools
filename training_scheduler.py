@@ -1,9 +1,10 @@
+import importlib
 from argparse import Namespace
 from collections import OrderedDict
 
 from logging import FileHandler
 
-from multiprocessing import Process
+from multiprocessing import Process, Lock
 
 import os
 
@@ -59,6 +60,7 @@ class TrainingScheduler(object):
     """
     Run multiple instance of trainer.
     """
+
     def __init__(self, train_func, dep_parser_class, train=None, dev=None, test=None):
         self.train = train
         self.dev = dev
@@ -98,6 +100,69 @@ class TrainingScheduler(object):
         for title, options in self.all_options.items():
             logger.info("Training " + title)
             self.train_func(options, self.train, self.dev, self.test)
+            for handler in logger.handlers:
+                if isinstance(handler, FileHandler):
+                    logger.removeHandler(handler)
+
+
+def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
+                    initializer_lock, initializer=None):
+    if initializer is not None:
+        with initializer_lock:
+            initializer(title)
+
+    dep_parser_class = getattr(importlib.import_module(module_name), class_name)
+    options_dict["title"] = title
+    options_dict["outdir"] = os.path.join(outdir_prefix, "model-" + title)
+    options = parse_dict_multistage(dep_parser_class, options_dict, ["train"])
+    dep_parser_class.train_parser(options)
+
+
+class LazyLoadTrainingScheduler(object):
+    """
+    Run multiple instance of trainer.
+    """
+
+    def __init__(self, module_name, class_name, initializer=None):
+        self.module_name = module_name
+        self.class_name = class_name
+        self.all_options_and_outdirs = OrderedDict()
+        self.initializer = initializer
+
+    def add_options(self, title, options_dict, outdir_prefix=""):
+        self.all_options_and_outdirs[title] = (dict(options_dict), outdir_prefix)
+
+    def run_parallel(self):
+        initializer_lock = Lock()
+        if len(self.all_options_and_outdirs) == 1:
+            self.run()
+            return
+
+        processes = {}
+        for title, (options_dict, outdir_prefix) in self.all_options_and_outdirs.items():
+            print("Training " + title)
+            processes[title] = Process(target=lazy_run_parser,
+                                       args=(self.module_name, self.class_name, title,
+                                             options_dict, outdir_prefix, initializer_lock,
+                                             self.initializer)
+                                       )
+
+        try:
+            for index, process in processes.items():
+                process.start()
+            for index, process in processes.items():
+                process.join()
+        except KeyboardInterrupt:
+            for index, process in processes.items():
+                process.terminate()
+
+    def run(self):
+        if self.initializer is not None:
+            self.initializer(None)
+        for title, (options_dict, outdir_prefix) in self.all_options_and_outdirs.items():
+            logger.info("Training " + title)
+            lazy_run_parser(self.module_name, self.class_name, title,
+                            options_dict, outdir_prefix, None)
             for handler in logger.handlers:
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
