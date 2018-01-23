@@ -135,7 +135,7 @@ class LazyLoadTrainingScheduler(object):
         return cls(parser_class.__module__, parser_class.__name__, initializer)
 
     def add_options(self, title, options_dict, outdir_prefix="", mode="train"):
-        self.all_options_and_outdirs[title] = (dict(options_dict), outdir_prefix, mode)
+        self.all_options_and_outdirs[title, outdir_prefix, mode] = dict(options_dict)
 
     def run_parallel(self):
         initializer_lock = Lock()
@@ -144,9 +144,9 @@ class LazyLoadTrainingScheduler(object):
             return
 
         processes = {}
-        for title, (options_dict, outdir_prefix, mode) in self.all_options_and_outdirs.items():
+        for (title, outdir_prefix, mode), options_dict in self.all_options_and_outdirs.items():
             print("Training " + title)
-            processes[title] = Process(target=lazy_run_parser,
+            processes[title, outdir_prefix] = Process(target=lazy_run_parser,
                                        args=(self.module_name, self.class_name, title,
                                              options_dict, outdir_prefix, initializer_lock,
                                              mode, self.initializer)
@@ -164,7 +164,7 @@ class LazyLoadTrainingScheduler(object):
     def run(self):
         if self.initializer is not None:
             self.initializer(None)
-        for title, (options_dict, outdir_prefix, mode) in self.all_options_and_outdirs.items():
+        for (title, outdir_prefix, mode), options_dict in self.all_options_and_outdirs.items():
             logger.info("Training " + title)
             lazy_run_parser(self.module_name, self.class_name, title,
                             options_dict, outdir_prefix, None, mode)
