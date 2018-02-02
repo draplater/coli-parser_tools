@@ -107,14 +107,15 @@ class TrainingScheduler(object):
 
 def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     initializer_lock, mode="train", initializer=None):
-    if initializer is not None:
-        with initializer_lock:
-            initializer(title)
-
-    dep_parser_class = getattr(importlib.import_module(module_name), class_name)
     if mode == "train":
         options_dict["title"] = title
         options_dict["outdir"] = os.path.join(outdir_prefix, "model-" + title)
+
+    if initializer is not None:
+        with initializer_lock:
+            initializer(options_dict)
+
+    dep_parser_class = getattr(importlib.import_module(module_name), class_name)
     options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
     options.func(options)
 
@@ -162,10 +163,10 @@ class LazyLoadTrainingScheduler(object):
                 process.terminate()
 
     def run(self):
-        if self.initializer is not None:
-            self.initializer(None)
         for (title, outdir_prefix, mode), options_dict in self.all_options_and_outdirs.items():
             logger.info("Training " + title)
+            if self.initializer is not None:
+                self.initializer(options_dict)
             lazy_run_parser(self.module_name, self.class_name, title,
                             options_dict, outdir_prefix, None, mode)
             for handler in logger.handlers:
