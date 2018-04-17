@@ -104,6 +104,9 @@ class TrainingScheduler(object):
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
 
+    def clear(self):
+        self.all_options = OrderedDict()
+
 
 def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     initializer_lock, mode="train", initializer=None):
@@ -173,3 +176,5 @@ class LazyLoadTrainingScheduler(object):
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
 
+    def clear(self):
+        self.all_options_and_outdirs = OrderedDict()
