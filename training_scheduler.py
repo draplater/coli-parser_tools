@@ -99,10 +99,11 @@ class TrainingScheduler(object):
     def run(self):
         for title, options in self.all_options.items():
             logger.info("Training " + title)
-            self.train_func(options, self.train, self.dev, self.test)
+            ret = self.train_func(options, self.train, self.dev, self.test)
             for handler in logger.handlers:
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
+            logger.info("{} Done! result is {}".format(title, ret))
 
     def clear(self):
         self.all_options = OrderedDict()
@@ -120,7 +121,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
 
     dep_parser_class = getattr(importlib.import_module(module_name), class_name)
     options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
-    options.func(options)
+    return options.func(options)
 
 
 class LazyLoadTrainingScheduler(object):
@@ -151,10 +152,10 @@ class LazyLoadTrainingScheduler(object):
         for (title, outdir_prefix, mode), options_dict in self.all_options_and_outdirs.items():
             print("Training " + title)
             processes[title, outdir_prefix] = Process(target=lazy_run_parser,
-                                       args=(self.module_name, self.class_name, title,
-                                             options_dict, outdir_prefix, initializer_lock,
-                                             mode, self.initializer)
-                                       )
+                                                      args=(self.module_name, self.class_name, title,
+                                                            options_dict, outdir_prefix, initializer_lock,
+                                                            mode, self.initializer)
+                                                      )
 
         try:
             for index, process in processes.items():
@@ -170,11 +171,12 @@ class LazyLoadTrainingScheduler(object):
             logger.info("Training " + title)
             if self.initializer is not None:
                 self.initializer(options_dict)
-            lazy_run_parser(self.module_name, self.class_name, title,
-                            options_dict, outdir_prefix, None, mode)
+            ret = lazy_run_parser(self.module_name, self.class_name, title,
+                                  options_dict, outdir_prefix, None, mode)
             for handler in logger.handlers:
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
+            logger.info("{} Done! result is {}".format(title, ret))
 
     def clear(self):
         self.all_options_and_outdirs = OrderedDict()
