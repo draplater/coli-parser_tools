@@ -2,7 +2,6 @@ import importlib
 import sys
 import time
 import traceback
-import weakref
 import code
 from argparse import Namespace
 from collections import OrderedDict
@@ -75,38 +74,36 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
     ret = None
     need_reload = False
     need_console = False
+    start_time = 0
     cache_keeper = {}
 
     while ret is None:
         if need_reload:
+            from utils.xreload import xreload
+            import pathlib
             import gc
             logger.info("Reloading modules...")
             project_root = os.path.dirname(__file__)
+
+            for r_module_name, module in sys.modules.items():
+                module_file = getattr(module, "__file__", None)
+                if module_file is None:
+                    continue
+                if module_file.startswith(project_root):
+                    if "__main__" not in r_module_name:
+                        modify_time = pathlib.Path(module_file).stat().st_mtime
+                        if modify_time > start_time:
+                            ret = xreload(module)
+                            if ret:
+                                logger.info(r_module_name + " updated")
+
+            # do full GC
             try:
                 # noinspection PyUnboundLocalVariable
-                del dep_parser_class, options
+                del dep_parser_class, options, module
             except NameError:
                 pass
-            modules = list(sys.modules.items())
-            modules_refs = []
-            module = None
-
-            # unload modules in the project
-            for r_module_name, module in modules:
-                if getattr(module, "__file__", "").startswith(project_root):
-                    if "__main__" not in r_module_name:
-                        modules_refs.append((r_module_name, weakref.ref(module)))
-                        # delete this module instead reload it
-                        # because it's difficult to determine reload order
-                        del sys.modules[r_module_name]
-            del module
-            del modules
-
-            # determine whether the module is recycled
             gc.collect()
-            for r_module_name, module_ref in modules_refs:
-                if module_ref() is not None:
-                    logger.info("{} is not collected by gc".format(r_module_name))
 
         if need_console:
             def exit():
@@ -123,6 +120,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             except SystemExit:
                 pass
 
+        start_time = time.time()
         # noinspection PyBroadException
         try:
             dep_parser_class = getattr(importlib.import_module(module_name), class_name)
@@ -130,11 +128,8 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             if options.use_exception_handler:
                 importlib.import_module("common_utils").cache_keeper = cache_keeper
             ret = options.func(options)
-        except KeyboardInterrupt:
-            # won't happen bacause it's running in a thread
-            raise
         except Exception:
-            if not options_dict["use-exception-handler"]:
+            if not options_dict.get("use-exception-handler"):
                 raise
             # handle errors
             traceback.print_exc()
@@ -181,6 +176,26 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                 else:
                     continue
     return ret
+
+
+def async_raise(tid, excobj):
+    import ctypes
+    import platform
+    version_info = platform.sys.version_info
+    assert version_info.major >= 3
+    # >= python 3.7
+    if version_info.minor >= 7:
+        tid = ctypes.c_ulong(tid)
+    else:
+        tid = ctypes.c_long(tid)
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, ctypes.py_object(excobj))
+    if res == 0:
+        raise ValueError("nonexistent thread id")
+    elif res > 1:
+        # """if it returns a number greater than one, you're in trouble,
+        # and you should call it again with exc=NULL to revert the effect"""
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(tid, 0)
+        raise SystemError("PyThreadState_SetAsyncExc failed")
 
 
 class LazyLoadTrainingScheduler(object):
@@ -243,17 +258,20 @@ class LazyLoadTrainingScheduler(object):
                     ret = result_obj.get()
                 except KeyboardInterrupt:
                     # handle keyboard interrupt
-                    answer = None
-                    while answer != "yes" or answer != "no":
+                    while True:
                         try:
                             answer = input("Really exit ? (yes/no)")
                         except KeyboardInterrupt:
-                            pass
-                    if answer == "yes":
-                        continue
-                    else:
-                        pool.terminate()
-                        raise
+                            continue
+                        if answer == "yes":
+                            if pool._pool[0].is_alive():
+                                async_raise(pool._pool[0].ident, KeyboardInterrupt)
+                                pool._pool[0].join()
+                                raise
+                            else:
+                                raise
+                        elif answer == "no":
+                            break
             for handler in logger.handlers:
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
