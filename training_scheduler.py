@@ -13,7 +13,8 @@ from multiprocessing.pool import ThreadPool
 
 import os
 
-from logger import logger
+from coli.basic_tools import common_utils
+from coli.basic_tools.logger import logger
 
 
 def dict_to_commandline(dic, prefix=()):
@@ -126,7 +127,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             dep_parser_class = getattr(importlib.import_module(module_name), class_name)
             options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
             if options.use_exception_handler:
-                importlib.import_module("common_utils").cache_keeper = cache_keeper
+                common_utils.cache_keeper = cache_keeper
             ret = options.func(options)
         except Exception:
             if not options_dict.get("use-exception-handler"):
