@@ -20,7 +20,7 @@ import graph_utils
 import tree_utils
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
-from training_scheduler import TrainingScheduler
+from coli.parser_tools.training_scheduler import TrainingScheduler
 
 
 class DataTypeBase(metaclass=ABCMeta):
