@@ -16,8 +16,7 @@ from abc import ABCMeta, abstractmethod
 
 import time
 
-import graph_utils
-import tree_utils
+from coli.bilexical_base import tree_utils, graph_utils
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 from coli.parser_tools.training_scheduler import TrainingScheduler
