@@ -12,6 +12,7 @@ from multiprocessing import Process, Lock
 from multiprocessing.pool import ThreadPool
 
 import os
+from pprint import pprint
 
 from coli.basic_tools import common_utils
 from coli.basic_tools.logger import logger
@@ -76,7 +77,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
     need_reload = False
     need_console = False
     start_time = 0
-    cache_keeper = {}
+    cache_keeper = common_utils.cache_keeper or {}
 
     while ret is None:
         if need_reload:
@@ -84,7 +85,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             import pathlib
             import gc
             logger.info("Reloading modules...")
-            project_root = os.path.dirname(__file__)
+            project_root = os.path.abspath(os.path.dirname(__file__) + "/../../") + "/"
 
             for r_module_name, module in sys.modules.items():
                 module_file = getattr(module, "__file__", None)
@@ -94,8 +95,8 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     if "__main__" not in r_module_name:
                         modify_time = pathlib.Path(module_file).stat().st_mtime
                         if modify_time > start_time:
-                            ret = xreload(module)
-                            if ret:
+                            reload_status = xreload(module)
+                            if reload_status:
                                 logger.info(r_module_name + " updated")
 
             # do full GC
@@ -141,15 +142,22 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             # choose error handling method
             need_console = False
             while True:
+
+                def locals_at(frame_level):
+                    return list(traceback.walk_tb(sys.exc_info()[2]))[frame_level][0].f_locals
+
                 logger.info("PID: {}\n".format(os.getpid()))
-                choice = input("Exception occurred. What do you want to do?\n"
-                               "reload - reload codes and retry\n"
-                               "console-keep - keep exception stack and start a interactive console\n"
-                               "console-reload - clear exception stack, reload, and start a interactive console\n"
-                               "pdb - set trace for pdb \n"
-                               "exit - reraise exception and exit\n"
-                               ">> "
-                               )
+                input_cmd = input("Exception occurred. What do you want to do?\n"
+                                  "reload - reload codes and retry\n"
+                                  "console-keep - keep exception stack and start a interactive console\n"
+                                  "extract_tb - print traceback frame summary\n"
+                                  "print_local [frame_level] [key] - print local variables in exception stack\n"
+                                  "console-reload - clear exception stack, reload, and start a interactive console\n"
+                                  "pdb - set trace for pdb \n"
+                                  "exit - reraise exception and exit\n"
+                                  ">> "
+                                  )
+                choice, _, args = input_cmd.partition(" ")
                 if choice == "exit":
                     raise  # exit the program
                 elif choice == "reload":
@@ -174,6 +182,25 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                 elif choice == "pdb":
                     import pdb
                     pdb.set_trace()
+                elif choice == "extract_tb":
+                    pprint(traceback.extract_tb(sys.exc_info()[-1]))
+                elif choice == "print_local":
+                    args_list = args.strip().split(" ")
+                    if len(args_list) >= 1:
+                        try:
+                            frame_level = int(args_list[0])
+                        except ValueError:
+                            print("print_local [frame_level] [key]")
+                            continue
+                    if len(args_list) == 1:
+                        # noinspection PyUnboundLocalVariable
+                        print(locals_at(frame_level).keys())
+                    elif len(args_list) == 2:
+                        key = args_list[1]
+                        print(locals_at(frame_level)[key])
+                    else:
+                        print("print_local [frame_level] [key]")
+                        continue
                 else:
                     continue
     return ret
@@ -261,16 +288,16 @@ class LazyLoadTrainingScheduler(object):
                     # handle keyboard interrupt
                     while True:
                         try:
-                            answer = input("Really exit ? (yes/no)")
+                            answer = input("Really exit ? (yes/no/restart)")
                         except KeyboardInterrupt:
                             continue
-                        if answer == "yes":
-                            if pool._pool[0].is_alive():
-                                async_raise(pool._pool[0].ident, KeyboardInterrupt)
-                                pool._pool[0].join()
+                        if answer == "yes" or answer == "restart":
+                            async_raise(pool._pool[0].ident, KeyboardInterrupt)
+                            pool._pool[0].join()
+                            if answer == "yes":
                                 raise
                             else:
-                                raise
+                                break
                         elif answer == "no":
                             break
             for handler in logger.handlers:
