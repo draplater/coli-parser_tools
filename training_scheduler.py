@@ -18,6 +18,9 @@ from coli.basic_tools import common_utils
 from coli.basic_tools.logger import logger
 
 
+NO_RETURN = object()
+
+
 def dict_to_commandline(dic, prefix=()):
     option_cmd = list(prefix)
     for k, v in dic.items():
@@ -73,13 +76,13 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
         with initializer_lock:
             initializer(options_dict)
 
-    ret = None
+    ret = NO_RETURN
     need_reload = False
     need_console = False
     start_time = 0
     cache_keeper = common_utils.cache_keeper or {}
 
-    while ret is None:
+    while ret is NO_RETURN:
         if need_reload:
             from utils.xreload import xreload
             import pathlib
@@ -280,8 +283,8 @@ class LazyLoadTrainingScheduler(object):
                 (self.module_name, self.class_name, title,
                  options_dict, outdir_prefix, None, mode)
             )
-            ret = None
-            while ret is None:
+            ret = NO_RETURN
+            while ret is NO_RETURN:
                 try:
                     ret = result_obj.get()
                 except KeyboardInterrupt:
