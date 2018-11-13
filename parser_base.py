@@ -255,7 +255,10 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
             suffix = ""
         dev_output = os.path.join(
             out_dir,
-            '{}_epoch_{}.{}'.format(prefix, epoch + 1, suffix))
+            '{}_epoch_{}.{}'.format(
+                prefix,
+                (epoch + 1) if isinstance(epoch, (int, float)) else epoch,
+                suffix))
         return dev_output
 
     @classmethod
