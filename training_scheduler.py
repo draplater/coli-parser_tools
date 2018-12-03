@@ -145,9 +145,11 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             # choose error handling method
             need_console = False
             while True:
+                # save exc_info to variable to prevent future exception
+                exc_info = sys.exc_info()
 
                 def locals_at(frame_level):
-                    return list(traceback.walk_tb(sys.exc_info()[2]))[frame_level][0].f_locals
+                    return list(traceback.walk_tb(exc_info[2]))[frame_level][0].f_locals
 
                 logger.info("PID: {}\n".format(os.getpid()))
                 input_cmd = input("Exception occurred. What do you want to do?\n"
@@ -186,7 +188,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     import pdb
                     pdb.set_trace()
                 elif choice == "extract_tb":
-                    pprint(traceback.extract_tb(sys.exc_info()[-1]))
+                    pprint(traceback.extract_tb(exc_info[-1]))
                 elif choice == "print_local":
                     args_list = args.strip().split(" ")
                     if len(args_list) >= 1:
