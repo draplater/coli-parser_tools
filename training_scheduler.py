@@ -130,7 +130,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
         try:
             dep_parser_class = getattr(importlib.import_module(module_name), class_name)
             options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
-            if options.use_exception_handler:
+            if getattr(options, "use_exception_handler", False):
                 common_utils.cache_keeper = cache_keeper
             ret = options.func(options)
         except Exception:
