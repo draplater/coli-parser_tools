@@ -5,6 +5,7 @@ import traceback
 import code
 from argparse import Namespace
 from collections import OrderedDict
+from copy import deepcopy
 
 from logging import FileHandler
 
@@ -14,7 +15,11 @@ from multiprocessing.pool import ThreadPool
 import os
 from pprint import pprint
 
+import dataclasses
+from dataclasses import is_dataclass
+
 from coli.basic_tools import common_utils
+from coli.basic_tools.dataclass_argparse import check_argparse_result
 from coli.basic_tools.logger import logger
 
 
@@ -69,8 +74,13 @@ def parse_dict_multistage(dep_parser_class, dic, prefix=()):
 def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     initializer_lock, mode="train", initializer=None):
     if mode == "train":
-        options_dict["title"] = title
-        options_dict["outdir"] = os.path.join(outdir_prefix, "model-" + title)
+        output = os.path.join(outdir_prefix, "model-" + title)
+        if is_dataclass(options_dict):
+            options_dict.title = title
+            options_dict.output = output
+        else:
+            options_dict["title"] = title
+            options_dict["output"] = output
 
     if initializer is not None:
         with initializer_lock:
@@ -105,7 +115,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             # do full GC
             try:
                 # noinspection PyUnboundLocalVariable
-                del dep_parser_class, options, module
+                del dep_parser_class, options, module, exc_info
             except NameError:
                 pass
             gc.collect()
@@ -129,12 +139,25 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
         # noinspection PyBroadException
         try:
             dep_parser_class = getattr(importlib.import_module(module_name), class_name)
-            options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
+            if is_dataclass(options_dict):
+                options = options_dict
+                funcs = {"train": lambda: dep_parser_class.train_parser,
+                         "dev": lambda: dep_parser_class.predict_with_parser,
+                         "eval": lambda: dep_parser_class.eval_only}
+                func = funcs[mode]()
+            else:
+                options = parse_dict_multistage(dep_parser_class, options_dict, [mode])
+                func = options.func
+                check_argparse_result(options)
             if getattr(options, "use_exception_handler", False):
                 common_utils.cache_keeper = cache_keeper
-            ret = options.func(options)
+            ret = func(options)
         except Exception:
-            if not options_dict.get("use-exception-handler"):
+            if is_dataclass(options_dict):
+                use_exception_handler = options_dict.use_exception_handler
+            else:
+                use_exception_handler = options_dict.get("use-exception-handler")
+            if not use_exception_handler:
                 raise
             # handle errors
             traceback.print_exc()
@@ -247,7 +270,11 @@ class LazyLoadTrainingScheduler(object):
         return cls(parser_class.__module__, parser_class.__name__, initializer)
 
     def add_options(self, title, options_dict, outdir_prefix="", mode="train"):
-        self.all_options_and_outdirs[title, outdir_prefix, mode] = dict(options_dict)
+        if is_dataclass(options_dict):
+            options_dict_copy = deepcopy(options_dict)
+        else:
+            options_dict_copy = dict(options_dict)
+        self.all_options_and_outdirs[title, outdir_prefix, mode] = options_dict_copy
 
     def run_parallel(self):
         initializer_lock = Lock()

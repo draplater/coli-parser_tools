@@ -16,6 +16,9 @@ from abc import ABCMeta, abstractmethod
 
 import time
 
+from dataclasses import dataclass
+
+from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser
 from coli.bilexical_base import tree_utils, graph_utils
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
@@ -80,60 +83,83 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
     def load(cls, prefix, new_options=None):
         pass
 
+    @dataclass
+    class Options(object):
+        title: str = argfield("default",
+                              help="Name of this task")
+        train: str = argfield(metavar="FILE",
+                              help="Path of training set")
+        dev: List[str] = argfield(metavar="FILE", nargs="+",
+                                  help="Path of development set")
+        max_save: int = argfield(100,
+                                 help="keep only best n model when training")
+        epochs: int = argfield(30,
+                               help="Training epochs")
+        debug_cache: bool = argfield(False,
+                                     help="Use cache file for quick debugging")
+
+        # both train and predict
+        output: str = argfield(predict_time=True, predict_default=REQUIRED,
+                               help="Output path")
+        test: str = argfield(default=None,
+                             metavar="FILE", predict_time=True, predict_default=REQUIRED,
+                             help="Path of test set")
+        model: str = argfield(default="model.", help="Load/Save model file", metavar="FILE",
+                              predict_time=True, predict_default=REQUIRED)
+        dynet_seed: int = argfield(42, predict_time=True)
+        dynet_autobatch: int = argfield(0, predict_time=True)
+        dynet_mem: int = argfield(0, predict_time=True)
+        dynet_gpus: int = argfield(0, predict_time=True)
+        dynet_l2: float = argfield(0.0, predict_time=True)
+        weight_decay: float = argfield(0.0, predict_time=True)
+        output_scores: bool = argfield(False, predict_time=True)
+        data_format: str = argfield("default", predict_time=True,
+                                    help="format of input data")
+        # ???
+        # group.add_argument("--data-format", dest="data_format",
+        #                    choices=cls.get_data_formats(),
+        #                    default=cls.default_data_format_name)
+        bilm_cache: bool = argfield(False, predict_time=True,
+                                    help="path of elmo cache file")
+        bilm_use_cache_only: bool = argfield(
+            False, predict_time=True,
+            help="use elmo in cache file only, do not generate new elmo")
+        bilm_path: str = argfield(None, metavar="FILE", predict_time=True,
+                                  help="path of elmo model")
+        bilm_stateless: bool = argfield(False, predict_time=True,
+                                        help="only use stateless elmo")
+        bilm_gpu: bool = argfield(False, predict_time=True,
+                                  help="run elmo on these gpu")
+        use_exception_handler: bool = argfield(
+            False, predict_time=True,
+            help="useful tools for quick debugging when encountering an error")
+
+        # predict only
+        eval: bool = argfield(predict_default=False, train_time=False, predict_time=True)
+        input_format: str = argfield(
+            choices=["standard", "tokenlist",
+                     "space", "english", "english-line"],
+            help='Input format. (default)"standard": use the same format of treebank;\n'
+                 'tokenlist: like [[(sent_1_word1, sent_1_pos1), ...], [...]];\n'
+                 'space: sentence is separated by newlines, and words are separated by space;'
+                 'no POSTag info will be used. \n'
+                 'english: raw english sentence that will be processed by NLTK tokenizer, '
+                 'no POSTag info will be used.',
+            predict_time=True, train_time=False,
+            predict_default="standard"
+        )
+
     @classmethod
     def add_parser_arguments(cls, arg_parser):
-        group = arg_parser.add_argument_group(DependencyParserBase.__name__)
-        group.add_argument("--title", type=str, dest="title", default="default")
-        group.add_argument("--train", dest="conll_train", help="Annotated CONLL train file", metavar="FILE",
-                           required=True)
-        group.add_argument("--dev", dest="conll_dev", help="Annotated CONLL dev file", metavar="FILE", nargs="+",
-                           required=True)
-        group.add_argument("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE")
-        group.add_argument("--outdir", type=str, dest="output", required=True)
-        group.add_argument("--max-save", type=int, dest="max_save", default=100)
-        group.add_argument("--model", dest="model", help="Load/Save model file", metavar="FILE", default="model.")
-        group.add_argument("--epochs", type=int, dest="epochs", default=30)
-        group.add_argument("--lr", type=float, dest="learning_rate", default=None)
-        group.add_argument("--debug-cache", action="store_true", default=False)
-        group.add_argument("--print-every", type=int, default=100)
+        DataClassArgParser("", arg_parser, {"default": cls.Options()}, mode="train")
 
     @classmethod
     def add_predict_arguments(cls, arg_parser):
-        group = arg_parser.add_argument_group(DependencyParserBase.__name__)
-        group.add_argument("--test", dest="conll_test", help="Annotated CONLL test file", metavar="FILE", required=True)
-        group.add_argument("--output", dest="out_file", help="Output file", metavar="FILE", required=True)
-        group.add_argument("--model", dest="model", help="Load/Save model file", metavar="FILE", required=True)
-        group.add_argument("--eval", action="store_true", dest="evaluate", default=False)
-        group.add_argument("--format", dest="input_format", choices=["standard", "tokenlist",
-                                                                     "space", "english", "english-line"],
-                           help='Input format. (default)"standard": use the same format of treebank;\n'
-                                'tokenlist: like [[(sent_1_word1, sent_1_pos1), ...], [...]];\n'
-                                'space: sentence is separated by newlines, and words are separated by space;'
-                                'no POSTag info will be used. \n'
-                                'english: raw english sentence that will be processed by NLTK tokenizer, '
-                                'no POSTag info will be used.',
-                           default="standard"
-                           )
+        DataClassArgParser("", arg_parser, {"default": cls.Options()}, mode="predict")
 
     @classmethod
     def add_common_arguments(cls, arg_parser):
-        group = arg_parser.add_argument_group(DependencyParserBase.__name__ + "(train and test)")
-        group.add_argument("--dynet-seed", type=int, dest="seed", default=0)
-        group.add_argument("--dynet-autobatch", type=int, dest="autobatch", default=0)
-        group.add_argument("--dynet-mem", dest="mem", default=0)
-        group.add_argument("--dynet-gpus", type=int, dest="mem", default=0)
-        group.add_argument("--dynet-l2", type=float, dest="l2", default=0.0)
-        group.add_argument("--dynet-weight-decay", type=float, dest="weight_decay", default=0.0)
-        group.add_argument("--output-scores", action="store_true", dest="output_scores", default=False)
-        group.add_argument("--data-format", dest="data_format",
-                           choices=cls.get_data_formats(),
-                           default=cls.default_data_format_name)
-        group.add_argument("--bilm-cache")
-        group.add_argument("--bilm-use-cache-only", action="store_true", default=False)
-        group.add_argument("--bilm-path", metavar="FILE")
-        group.add_argument("--bilm-stateless", action="store_true", default=False)
-        group.add_argument("--bilm-gpu")
-        group.add_argument("--use-exception-handler", action="store_true", default=False)
+        pass
 
     @classmethod
     def options_hook(cls, options):
@@ -165,13 +191,13 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
                       enable=options.debug_cache)
         def load_data(data_train, data_dev, data_test):
             if data_train is None:
-                data_train = DataFormatClass.from_file(options.conll_train)
+                data_train = DataFormatClass.from_file(options.train)
 
             if data_dev is None:
-                data_dev = {i: DataFormatClass.from_file(i, False) for i in options.conll_dev}
+                data_dev = {i: DataFormatClass.from_file(i, False) for i in options.dev}
 
-            if data_test is None and options.conll_test is not None:
-                data_test = DataFormatClass.from_file(options.conll_test, False)
+            if data_test is None and options.test is not None:
+                data_test = DataFormatClass.from_file(options.test, False)
             else:
                 data_test = None
             return data_train, data_dev, data_test
@@ -263,18 +289,23 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
 
     @classmethod
     def predict_with_parser(cls, options):
-        DataFormatClass = cls.get_data_formats()[options.data_format]
+        default_logger.info('Loading Model...')
+        options.is_train = False
+        parser = cls.load(options.model, options)
+        parser.logger.info('Model loaded')
+
+        DataFormatClass = cls.get_data_formats()[parser.options.data_format]
         if options.input_format == "standard":
-            data_test = DataFormatClass.from_file(options.conll_test, False)
+            data_test = DataFormatClass.from_file(options.test, False)
         elif options.input_format == "space":
-            with smart_open(options.conll_test) as f:
+            with smart_open(options.test) as f:
                 data_test = [DataFormatClass.from_words_and_postags([(word, "X") for word in line.strip().split(" ")])
                              for line in f]
         elif options.input_format.startswith("english"):
             from nltk import download, sent_tokenize
             from nltk.tokenize import TreebankWordTokenizer
             download("punkt")
-            with smart_open(options.conll_test) as f:
+            with smart_open(options.test) as f:
                 raw_sents = []
                 for line in f:
                     if options.input_format == "english-line":
@@ -286,19 +317,14 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
                 data_test = [DataFormatClass.from_words_and_postags([(token, "X") for token in sent])
                              for sent in tokenized_sents]
         elif options.input_format == "tokenlist":
-            with smart_open(options.conll_test) as f:
+            with smart_open(options.test) as f:
                 items = eval(f.read())
             data_test = DataFormatClass.from_words_and_postags(items)
         else:
             raise ValueError("invalid format option")
 
-        default_logger.info('Loading Model...')
-        options.is_train = False
-        parser = cls.load(options.model, options)
-        parser.logger.info('Model loaded')
-
         ts = time.time()
-        with smart_open(options.out_file, "w") as f_output:
+        with smart_open(options.output, "w") as f_output:
             if hasattr(DataFormatClass, "file_header"):
                 f_output.write(DataFormatClass.file_header + "\n")
             for i in parser.predict(data_test):
@@ -306,9 +332,9 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         te = time.time()
         parser.logger.info('Finished predicting and writing test. %.2f seconds.', te - ts)
 
-        if options.evaluate:
-            DataFormatClass.evaluate_with_external_program(options.conll_test,
-                                                           options.out_file)
+        if options.eval:
+            DataFormatClass.evaluate_with_external_program(options.test,
+                                                           options.output)
 
     @classmethod
     def get_arg_parser(cls):
