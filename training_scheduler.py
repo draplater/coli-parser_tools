@@ -15,7 +15,6 @@ from multiprocessing.pool import ThreadPool
 import os
 from pprint import pprint
 
-import dataclasses
 from dataclasses import is_dataclass
 
 from coli.basic_tools import common_utils
@@ -94,7 +93,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
 
     while ret is NO_RETURN:
         if need_reload:
-            from utils.xreload import xreload
+            from .xreload import xreload
             import pathlib
             import gc
             logger.info("Reloading modules...")
