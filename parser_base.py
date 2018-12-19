@@ -1,7 +1,7 @@
 import argparse
 import pickle
 import random
-from typing import Generic, TypeVar, Type, Dict, List
+from typing import Generic, TypeVar, Type, Dict, List, Optional
 
 import six
 from io import open
@@ -101,7 +101,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         # both train and predict
         output: str = argfield(predict_time=True, predict_default=REQUIRED,
                                help="Output path")
-        test: str = argfield(default=None,
+        test: Optional[str] = argfield(default=None,
                              metavar="FILE", predict_time=True, predict_default=REQUIRED,
                              help="Path of test set")
         model: str = argfield(default="model.", help="Load/Save model file", metavar="FILE",
@@ -124,7 +124,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         bilm_use_cache_only: bool = argfield(
             False, predict_time=True,
             help="use elmo in cache file only, do not generate new elmo")
-        bilm_path: str = argfield(None, metavar="FILE", predict_time=True,
+        bilm_path: Optional[str] = argfield(None, metavar="FILE", predict_time=True,
                                   help="path of elmo model")
         bilm_stateless: bool = argfield(False, predict_time=True,
                                         help="only use stateless elmo")
