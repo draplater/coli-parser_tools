@@ -18,11 +18,10 @@ import time
 
 from dataclasses import dataclass
 
-from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser
+from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result
 from coli.bilexical_base import tree_utils, graph_utils
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
-from coli.parser_tools.training_scheduler import TrainingScheduler
 
 
 class DataTypeBase(metaclass=ABCMeta):
@@ -370,6 +369,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
 
     @classmethod
     def get_training_scheduler(cls):
+        from coli.parser_tools.training_scheduler import TrainingScheduler
         return TrainingScheduler(cls)
 
     @classmethod
@@ -393,6 +393,16 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
                     default_logger.info(
                         "Add missing option: {}={}".format(action.dest, action.default))
                     setattr(options, action.dest, action.default)
+
+    @classmethod
+    def main(cls, argv=None):
+        from coli.parser_tools.training_scheduler import parse_cmd_multistage
+
+        if argv is None:
+            argv = sys.argv[1:]
+        args = parse_cmd_multistage(cls, argv)
+        check_argparse_result(args)
+        args.func(args)
 
 
 @six.add_metaclass(ABCMeta)
