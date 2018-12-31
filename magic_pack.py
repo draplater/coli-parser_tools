@@ -186,7 +186,15 @@ def get_dist_info():
 
 def get_codes():
     dist_info = get_dist_info()
-    stdlib_path = str(Path(base64.__file__).parent)
+    base64_file = Path(base64.__file__)
+    stdlib_path = base64_file.parent
+    # may be link in virtualenv
+    if base64_file.is_symlink():
+        stdlib_path_2 = Path(os.readlink(base64_file)).resolve().parent
+    else:
+        stdlib_path_2 = None
+
+    stdlib_paths = [str(i) for i in [stdlib_path, stdlib_path_2] if i is not None]
     module_sources = {}
     for name, module in list(sys.modules.items()):
         if name == "__main__" or name == "__mp_main__":
@@ -196,7 +204,7 @@ def get_codes():
             continue
 
         module_file = getattr(module, "__file__", None)
-        if not module_file or module_file.startswith(stdlib_path):
+        if not module_file or any(module_file.startswith(i) for i in stdlib_paths):
             continue
 
         # ignore intellij pydev helper
