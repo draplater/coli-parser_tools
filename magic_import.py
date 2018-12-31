@@ -53,8 +53,8 @@ class MagicPackSourceLoader(SourceLoader):
         return self.module_info[1]
 
     def exec_module(self, module):
-        super(MagicPackSourceLoader, self).exec_module(module)
         module.__file__ = self.get_filename(self.name)
+        super(MagicPackSourceLoader, self).exec_module(module)
 
 
 def restore_assets(path, assets):
