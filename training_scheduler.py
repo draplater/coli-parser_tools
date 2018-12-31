@@ -21,7 +21,6 @@ from coli.basic_tools import common_utils
 from coli.basic_tools.dataclass_argparse import check_argparse_result
 from coli.basic_tools.logger import logger
 
-
 NO_RETURN = object()
 
 
@@ -176,7 +175,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                 logger.info("PID: {}\n".format(os.getpid()))
                 input_cmd = input("Exception occurred. What do you want to do?\n"
                                   "reload - reload codes and retry\n"
-                                  "console-keep - keep exception stack and start a interactive console\n"
+                                  "console - keep exception stack and start a interactive console\n"
                                   "extract_tb - print traceback frame summary\n"
                                   "print_local [frame_level] [key] - print local variables in exception stack\n"
                                   "console-reload - clear exception stack, reload, and start a interactive console\n"
@@ -194,16 +193,23 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     need_console = True
                     need_reload = True
                     break
-                elif choice == "console-keep":
-                    def exit():
-                        raise SystemExit
+                elif choice == "console":
+                    args_list = args.strip().split(" ")
+                    if len(args_list) == 1:
+                        try:
+                            frame_level = int(args_list[0])
+                        except ValueError:
+                            print("console [frame_level]")
+                            continue
+                    else:
+                        frame_level = -1
 
                     try:
                         try:
-                            import IPython
-                            IPython.embed()
+                            from IPython.terminal.embed import InteractiveShellEmbed
+                            InteractiveShellEmbed().mainloop(local_ns=locals_at(frame_level))
                         except ModuleNotFoundError:
-                            code.interact(local=locals())
+                            code.interact(local=locals_at(frame_level))
                     except SystemExit:
                         continue  # goto choice
                 elif choice == "pdb":
@@ -328,7 +334,7 @@ class LazyLoadTrainingScheduler(object):
                             if answer == "yes":
                                 raise
                             else:
-                                break
+                                continue
                         elif answer == "no":
                             break
             for handler in logger.handlers:
