@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
         path_exists = os.path.exists(args.venv)
         if path_exists and not os.path.isdir(args.venv):
-            print(f"{args.venv} is not a directory", file=sys.stderr)
+            print("{} is not a directory".format(args.venv), file=sys.stderr)
             sys.exit(1)
 
         if sys.platform == 'win32':
@@ -34,7 +34,7 @@ if __name__ == '__main__':
             import venv
 
             if path_exists and os.listdir(args.venv):
-                print(f"{args.venv} is neither a virtualenv nor a empty directory",
+                print("{} is neither a virtualenv nor a empty directory".format(args.venv),
                       file=sys.stderr)
                 sys.exit(1)
             # create new venv
@@ -42,5 +42,5 @@ if __name__ == '__main__':
             if os.path.exists(python_path):
                 print(python_path)
             else:
-                print(f"failed to create virtualenv", file=sys.stderr)
+                print("failed to create virtualenv", file=sys.stderr)
                 sys.exit(1)
