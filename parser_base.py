@@ -3,7 +3,6 @@ import pickle
 import random
 from typing import Generic, TypeVar, Type, Dict, List, Optional
 
-import six
 from io import open
 
 from argparse import ArgumentParser
@@ -19,7 +18,6 @@ import time
 from dataclasses import dataclass
 
 from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result
-from coli.bilexical_base import tree_utils, graph_utils
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 
@@ -404,14 +402,3 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         check_argparse_result(args)
         args.func(args)
 
-
-@six.add_metaclass(ABCMeta)
-class GraphParserBase(DependencyParserBase):
-    available_data_formats = {"sdp2014": graph_utils.Graph, "sdp2015": graph_utils.Graph2015}
-    default_data_format_name = "sdp2014"
-
-
-@six.add_metaclass(ABCMeta)
-class TreeParserBase(DependencyParserBase):
-    available_data_formats = {"conllu": tree_utils.Sentence}
-    default_data_format_name = "conllu"
