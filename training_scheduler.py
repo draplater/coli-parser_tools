@@ -180,11 +180,11 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                                   "print_local [frame_level] [key] - print local variables in exception stack\n"
                                   "console-reload - clear exception stack, reload, and start a interactive console\n"
                                   "pdb - set trace for pdb \n"
-                                  "exit - reraise exception and exit\n"
+                                  "raise - reraise exception and exit\n"
                                   ">> "
                                   )
                 choice, _, args = input_cmd.partition(" ")
-                if choice == "exit":
+                if choice == "raise":
                     raise  # exit the program
                 elif choice == "reload":
                     need_reload = True
