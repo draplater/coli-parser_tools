@@ -6,7 +6,6 @@ from typing import Generic, TypeVar, Type, Dict, List, Optional
 from io import open
 
 from argparse import ArgumentParser
-from pprint import pformat
 
 import os
 import sys
@@ -17,7 +16,8 @@ import time
 
 from dataclasses import dataclass
 
-from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result
+from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result, \
+    pretty_format
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 
@@ -99,8 +99,8 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         output: str = argfield(predict_time=True, predict_default=REQUIRED,
                                help="Output path")
         test: Optional[str] = argfield(default=None,
-                             metavar="FILE", predict_time=True, predict_default=REQUIRED,
-                             help="Path of test set")
+                                       metavar="FILE", predict_time=True, predict_default=REQUIRED,
+                                       help="Path of test set")
         model: str = argfield(default="model.", help="Load/Save model file", metavar="FILE",
                               predict_time=True, predict_default=REQUIRED)
         dynet_seed: int = argfield(42, predict_time=True)
@@ -116,17 +116,17 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         # group.add_argument("--data-format", dest="data_format",
         #                    choices=cls.get_data_formats(),
         #                    default=cls.default_data_format_name)
-        bilm_cache: bool = argfield(False, predict_time=True,
-                                    help="path of elmo cache file")
+        bilm_cache: str = argfield(None, metavar="FILE", predict_time=True,
+                                   help="path of elmo cache file")
         bilm_use_cache_only: bool = argfield(
             False, predict_time=True,
             help="use elmo in cache file only, do not generate new elmo")
         bilm_path: Optional[str] = argfield(None, metavar="FILE", predict_time=True,
-                                  help="path of elmo model")
+                                            help="path of elmo model")
         bilm_stateless: bool = argfield(False, predict_time=True,
                                         help="only use stateless elmo")
-        bilm_gpu: bool = argfield(False, predict_time=True,
-                                  help="run elmo on these gpu")
+        bilm_gpu: str = argfield("", predict_time=True,
+                                 help="run elmo on these gpu")
         use_exception_handler: bool = argfield(
             False, predict_time=True,
             help="useful tools for quick debugging when encountering an error")
@@ -213,7 +213,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
                 default_logger.info("Considering {} training sentences and {} dev sentences for bilm cache".format(
                     len(train_sents), len(dev_sentences)))
                 # avoid running tensorflow in current process
-                script_path = os.path.join(os.path.dirname(__file__), "bilm/cache_manager.py")
+                script_path = os.path.join(os.path.dirname(__file__), "../../bilm/cache_manager.py")
                 p = subprocess.Popen([sys.executable, script_path, "pickle"], stdin=subprocess.PIPE, stdout=sys.stdout,
                                      stderr=sys.stderr)
                 args = (options.bilm_path, options.bilm_cache, train_sents, dev_sentences, options.bilm_gpu)
@@ -235,7 +235,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         # noinspection PyArgumentList
         parser = cls(options, data_train)
         log_to_file(parser.get_log_file(options))
-        parser.logger.info('Options:\n%s', pformat(options.__dict__))
+        parser.logger.info('Options:\n%s', pretty_format(options.__dict__))
         random_obj = random.Random(1)
         for epoch in range(options.epochs):
             parser.logger.info('Starting epoch %d', epoch)
@@ -401,4 +401,3 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         args = parse_cmd_multistage(cls, argv)
         check_argparse_result(args)
         args.func(args)
-
