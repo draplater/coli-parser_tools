@@ -102,9 +102,10 @@ def collect_assets(path, assets):
             if not str(asset).startswith(str(path_obj)):
                 print(f"asset {asset} not in {path_obj}, ignore it.")
                 continue
-            # noinspection PyTypeChecker
-            with open(asset, "rb") as f:
-                asset_sources[asset.relative_to(path_obj)] = (f.read(), asset.stat())
+            if asset.is_file():
+                # noinspection PyTypeChecker
+                with open(asset, "rb") as f:
+                    asset_sources[asset.relative_to(path_obj)] = (f.read(), asset.stat())
     return asset_sources
 
 
