@@ -62,6 +62,10 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         else:
             return cls.available_data_formats
 
+    @property
+    def data_format_class(self) -> Type[U]:
+        return self.get_data_formats()[self.options.data_format]
+
     @abstractmethod
     def train(self, graphs: List[U], *args, **kwargs):
         pass
