@@ -6,6 +6,7 @@ import pickle
 import struct
 import base64
 from argparse import ArgumentParser
+from contextlib import contextmanager
 
 magic_header = b'#!/bin/sh\n# MAGIC_STRING = SUGAR_RUSH\nSCRIPT_SIZE='
 script_size_len = 12
@@ -76,10 +77,32 @@ def extract_codes(all_sources, importer_namespace, dest):
                 importer_namespace["extract_cython_files"](
                     dest, name, sources, assets)
             elif module_info[0] == "version":
-                pypi_name, pypi_version =  module_info[1:]
+                pypi_name, pypi_version = module_info[1:]
                 if pypi_name not in pypi_pkgs:
                     f_req.write(pypi_name + "==" + pypi_version + "\n")
                     pypi_pkgs.add(pypi_name)
+
+
+@contextmanager
+def open_magic_pack(model_file, use_old_importer=True):
+    f = open(model_file, "rb")
+    read_script(f)
+    magic_importer_source, module_sources = pickle.load(f)
+    if use_old_importer:
+        importer_namespace = {}
+        exec(magic_importer_source, importer_namespace)
+        importer_class = importer_namespace["MagicPackImporter"]
+    else:
+        from .magic_import import MagicPackImporter
+        importer_class = MagicPackImporter
+    importer = importer_class(module_sources)
+    importer.install()
+    entrance_class = pickle.load(f)
+    try:
+        yield entrance_class
+    finally:
+        importer.disable()
+        f.close()
 
 
 def remove_option(parser, arg):
@@ -173,6 +196,7 @@ if __name__ == "__main__":
             read_script(f)
             entrance_class = read_until_entrance(f)
         import code
+
         code.interact(local={"Parser": entrance_class})
     else:
         print(f"Invalid mode {mode}")

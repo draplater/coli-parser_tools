@@ -3,7 +3,7 @@ import os
 import re
 import sys
 import tempfile
-from importlib.machinery import PathFinder, ModuleSpec
+from importlib.machinery import PathFinder, ModuleSpec, SourceFileLoader
 from importlib._bootstrap_external import _path_split
 from importlib.abc import SourceLoader
 from pathlib import Path
@@ -192,6 +192,7 @@ class MagicPackImporter(PathFinder):
 
         self.auto_install = False
         self.pyx_loader_class = None
+        self.enabled = True
 
     def find_spec(self, fullname, path=None, target=None):
         module_info = self.module_sources.get(fullname)
@@ -204,11 +205,18 @@ class MagicPackImporter(PathFinder):
                 pkg_tmp_dir = os.path.join(tmp_dir, "magic_pack", fullname)
                 if assets:
                     restore_assets(pkg_tmp_dir, assets)
-                spec = ModuleSpec(
-                    name=fullname,
-                    loader=MagicPackSourceLoader(fullname, module_info, pkg_tmp_dir, path),
-                    is_package=is_package(fullname, filename)
-                )
+                if self.enabled:
+                    spec = ModuleSpec(
+                        name=fullname,
+                        loader=MagicPackSourceLoader(fullname, module_info, pkg_tmp_dir, path),
+                        is_package=is_package(fullname, filename)
+                    )
+                else:
+                    spec = ModuleSpec(
+                        name=fullname,
+                        loader=SourceFileLoader(fullname, module_info[3]),
+                        is_package=is_package(fullname, filename)
+                    )
                 return spec
             if module_info[0] == "version":
                 default_spec = super(MagicPackImporter, self).find_spec(fullname, path, target)
@@ -260,3 +268,9 @@ class MagicPackImporter(PathFinder):
 
     def uninstall(self):
         sys.meta_path.remove(self)
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
