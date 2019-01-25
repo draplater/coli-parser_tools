@@ -17,7 +17,7 @@ import time
 from dataclasses import dataclass
 
 from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result, \
-    pretty_format
+    pretty_format, OptionsBase
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 
@@ -85,7 +85,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         pass
 
     @dataclass
-    class Options(object):
+    class Options(OptionsBase):
         title: str = argfield("default",
                               help="Name of this task")
         train: str = argfield(metavar="FILE",
