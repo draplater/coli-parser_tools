@@ -18,7 +18,7 @@ from pprint import pprint
 from dataclasses import is_dataclass
 
 from coli.basic_tools import common_utils
-from coli.basic_tools.dataclass_argparse import check_argparse_result
+from coli.basic_tools.dataclass_argparse import check_argparse_result, check_options
 from coli.basic_tools.logger import logger
 
 NO_RETURN = object()
@@ -76,6 +76,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
         if is_dataclass(options_dict):
             options_dict.title = title
             options_dict.output = output
+            check_options(options_dict, mode == "train")
         else:
             options_dict["title"] = title
             options_dict["output"] = output
