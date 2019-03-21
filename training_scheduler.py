@@ -313,15 +313,17 @@ class LazyLoadTrainingScheduler(object):
             if self.initializer is not None:
                 self.initializer(options_dict)
             # run in a thread to handle KeyboardInterrupt
-            result_obj = pool.apply_async(
-                lazy_run_parser,
-                (self.module_name, self.class_name, title,
-                 options_dict, outdir_prefix, None, mode)
-            )
+            # result_obj = pool.apply_async(
+            #     lazy_run_parser,
+            #     (self.module_name, self.class_name, title,
+            #      options_dict, outdir_prefix, None, mode)
+            # )
             ret = NO_RETURN
             while ret is NO_RETURN:
                 try:
-                    ret = result_obj.get()
+                    ret = lazy_run_parser(self.module_name, self.class_name, title,
+                                          options_dict, outdir_prefix, None, mode)
+                    # ret = result_obj.get()
                 except KeyboardInterrupt:
                     # handle keyboard interrupt
                     while True:
