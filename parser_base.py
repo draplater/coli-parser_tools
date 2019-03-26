@@ -1,7 +1,7 @@
 import argparse
 import pickle
 import random
-from typing import Generic, TypeVar, Type, Dict, List, Optional
+from typing import Generic, TypeVar, Type, Dict, List, Optional, Iterable
 
 from io import open
 
@@ -20,24 +20,14 @@ from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArg
     pretty_format, OptionsBase
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
+from coli.data_utils.dataset import DataFormatBase
+
+DF = TypeVar("DF", bound=DataFormatBase)
 
 
-class DataTypeBase(metaclass=ABCMeta):
-    @abstractmethod
-    def from_file(self, file_path: str, *args, **kwargs):
-        raise NotImplementedError
-
-    @abstractmethod
-    def to_string(self):
-        raise NotImplementedError
-
-
-U = TypeVar("U", bound=DataTypeBase)
-
-
-class DependencyParserBase(Generic[U], metaclass=ABCMeta):
-    DataType: Type[U] = None
-    available_data_formats: Dict[str, Type[U]] = {}
+class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
+    DataType: Type[DF] = None
+    available_data_formats: Dict[str, Type[DF]] = {}
     default_data_format_name = "default"
 
     def __init__(self, options, data_train=None, *args, **kwargs):
@@ -55,7 +45,7 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
         return self._logger
 
     @classmethod
-    def get_data_formats(cls) -> Dict[str, Type[U]]:
+    def get_data_formats(cls) -> Dict[str, Type[DF]]:
         """ for old class which has "DataType" but not "available_data_formats" """
         if not cls.available_data_formats:
             return {"default": cls.DataType}
@@ -63,11 +53,11 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
             return cls.available_data_formats
 
     @property
-    def data_format_class(self) -> Type[U]:
+    def data_format_class(self) -> Type[DF]:
         return self.get_data_formats()[self.options.data_format]
 
     @abstractmethod
-    def train(self, graphs: List[U], *args, **kwargs):
+    def train(self, graphs: List[DF], *args, **kwargs):
         pass
 
     @abstractmethod
@@ -178,6 +168,14 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
                           log_to_console=log_to_console,
                           name=getattr(options, "title", "logger"))
 
+    def write_result(self, output_file: str, data: Iterable[DF]):
+        if hasattr(self.data_format_class, "write_to_file"):
+            self.data_format_class.write_to_file(output_file, data)
+        else:
+            with open(output_file, "w") as f:
+                for output in data:
+                    f.write(output.to_string())
+
     @classmethod
     def train_parser(cls, options, data_train=None, data_dev=None, data_test=None):
         if sys.platform.startswith("linux"):
@@ -257,16 +255,8 @@ class DependencyParserBase(Generic[U], metaclass=ABCMeta):
 
             def predict(sentences, gold_file, output_file):
                 options.is_train = False
-                with open(output_file, "w") as f_output:
-                    if hasattr(DataFormatClass, "file_header"):
-                        f_output.write(DataFormatClass.file_header + "\n")
-                    for i in parser.predict(sentences):
-                        f_output.write(i.to_string())
-                # script_path = os.path.join(os.path.dirname(__file__), "main.py")
-                # p = subprocess.Popen([sys.executable, script_path, "mst+empty", "predict", "--model", path,
-                #                       "--test", gold_file,
-                #                       "--output", output_file], stdout=sys.stdout)
-                # p.wait()
+                result_itr = parser.predict(sentences)
+                parser.write_result(output_file, result_itr)
                 DataFormatClass.evaluate_with_external_program(gold_file, output_file)
 
             for file_name, file_content in data_devs.items():
