@@ -310,7 +310,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         elif options.input_format == "tokenlist":
             with smart_open(options.test) as f:
                 items = eval(f.read())
-            data_test = DataFormatClass.from_words_and_postags(items)
+            data_test = [DataFormatClass.from_words_and_postags(item) for item in items]
         else:
             raise ValueError("invalid format option")
 
