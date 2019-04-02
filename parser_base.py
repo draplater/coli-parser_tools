@@ -315,11 +315,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
             raise ValueError("invalid format option")
 
         ts = time.time()
-        with smart_open(options.output, "w") as f_output:
-            if hasattr(DataFormatClass, "file_header"):
-                f_output.write(DataFormatClass.file_header + "\n")
-            for i in parser.predict(data_test):
-                f_output.write(i.to_string())
+        parser.write_result(options.output, parser.predict(data_test))
         te = time.time()
         parser.logger.info('Finished predicting and writing test. %.2f seconds.', te - ts)
 
