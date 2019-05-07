@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+"""
+This file will be inserted into a shell script,
+so dont use single comma.
+"""
 import os
 import pickletools
 import sys
-import tempfile
 import pickle
 import struct
 import base64
@@ -11,7 +14,7 @@ from contextlib import contextmanager
 from types import ModuleType
 from typing import Any
 
-magic_header = b'#!/bin/sh\n# MAGIC_STRING = SUGAR_RUSH\nSCRIPT_SIZE='
+magic_header = b"#!/bin/sh\n# MAGIC_STRING = SUGAR_RUSH\nSCRIPT_SIZE="
 script_size_len = 12
 
 
@@ -24,7 +27,7 @@ def read_script(reader):
     """
     header = reader.read(len(magic_header))
     if header != magic_header:
-        raise TypeError("It's not a magic pack!")
+        raise TypeError("Not a magic pack!")
     script_size_packed = reader.read(script_size_len)
     script_size = struct.unpack("!Q", base64.b64decode(script_size_packed))[0]
     rest = reader.read(script_size - len(magic_header) - script_size_len)
@@ -118,14 +121,14 @@ def open_magic_pack(model_file, use_old_importer=True):
 
 def remove_option(parser, arg):
     for action in parser._actions:
-        if (vars(action)['option_strings']
-            and vars(action)['option_strings'][0] == arg) \
-                or vars(action)['dest'] == arg:
+        if (vars(action)["option_strings"]
+            and vars(action)["option_strings"][0] == arg) \
+                or vars(action)["dest"] == arg:
             parser._remove_action(action)
 
     for action in parser._action_groups:
         vars_action = vars(action)
-        var_group_actions = vars_action['_group_actions']
+        var_group_actions = vars_action["_group_actions"]
         for x in var_group_actions:
             if x.dest == arg:
                 var_group_actions.remove(x)
@@ -133,9 +136,9 @@ def remove_option(parser, arg):
 
 
 def add_alt_arguments(arg_parser):
-    arg_parser.add_argument('--python', default="${PYTHON}",
+    arg_parser.add_argument("--python", default="${PYTHON}",
                             help="The path of python interpreter")
-    arg_parser.add_argument('--venv',
+    arg_parser.add_argument("--venv",
                             help="Use virtualenv in this directory. "
                                  "Create new virtualenv if not exist. ")
 
@@ -166,16 +169,10 @@ def extract_codes_from_model(model_file, dest):
 
 
 def main():
-    # this file can be inserted in to a shell script
-    # and the "$xxx" will be replaced into real value
-    model_file = "$0"
-
-    if __file__.startswith(tempfile.gettempdir()):
-        os.remove(__file__)
+    model_file = os.environ.get("MAGIC_MODEL_FILE")
 
     rest_args = sys.argv[1:]
-    # "\x24\x30" == "$0", escape shell substitution
-    if model_file == "\x24\x30":
+    if model_file is None:
         arg_parser = ArgParserShowUsage("parser", add_help=False)
         arg_parser.add_argument("--model", metavar="FILE",
                                 help="Model file you want to use",
@@ -199,7 +196,7 @@ def main():
         predict_subparser = ArgumentParser("parser predict")
         entrance_class.add_predict_arguments(predict_subparser)
         entrance_class.add_common_arguments(predict_subparser)
-        if model_file != '\x24\x30':
+        if model_file is not None:
             remove_option(predict_subparser, "--model")
         args = predict_subparser.parse_args(rest_args)
         try:
@@ -209,7 +206,7 @@ def main():
         except ImportError:
             pass
 
-        if model_file != '\x24\x30':
+        if model_file is not None:
             args.model = model_file
             entrance_class.predict_with_parser(args)
     elif mode == "extract":
@@ -223,7 +220,7 @@ def main():
             read_script(f)
             entrance_class = read_until_entrance(f)
         import code
-        code.interact(local={"Parser": entrance_class})
+        code.interact(local={"parser": entrance_class})
     else:
         print(f"Invalid mode {mode}")
 

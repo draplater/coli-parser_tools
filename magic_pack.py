@@ -8,6 +8,8 @@ import struct
 import sys
 import inspect
 from pathlib import Path
+from typing import Any
+
 from coli.parser_tools import magic_load, magic_import, interpreter_selector
 from imp import is_builtin
 
@@ -16,40 +18,31 @@ from coli.parser_tools.magic_load import read_script, read_until_entrance
 script_template = b'''#!/bin/sh
 # MAGIC_STRING = SUGAR_RUSH
 SCRIPT_SIZE={scriptsize}
-SCRIPT_FILE=$(mktemp)
+INTERPRETOR_SELECTOR='{interpreter_selector_content}'
+MAGIC_LOAD_SCRIPT='{magic_load_content}'
 
 # Script 1: get python path
 # (getopt not support long options on some system
 #  so we use python)
 PYTHON=$(which python3)
-cat << EOF > $SCRIPT_FILE
-# ===== Script1 START =====
-{interpreter_selector_content}
-# ====== Script1 END ======
-EOF
 
 
 # first time: specify interpreter if needed
-PYTHON=$($PYTHON "$SCRIPT_FILE" "$@")
+PYTHON=$($PYTHON -c "$INTERPRETOR_SELECTOR" "$@")
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
     exit $RETVAL
 fi
 
 # second time: specify virtualenv if needed
-PYTHON=$(USE_VENV=true $PYTHON "$SCRIPT_FILE" "$@")
+PYTHON=$(USE_VENV=true $PYTHON -c "$INTERPRETOR_SELECTOR" "$@")
 RETVAL=$?
 if [ $RETVAL -ne 0 ]; then
     exit $RETVAL
 fi
 
-cat << EOF > $SCRIPT_FILE
-# ===== Script2 START =====
-{magic_load_content}
-# ====== Script2 END ======
-EOF
-
-exec $PYTHON "$SCRIPT_FILE" "$@"
+# main script
+MAGIC_MODEL_FILE="$0" exec $PYTHON -c "$MAGIC_LOAD_SCRIPT" "$@"
 
 # some error may cause the script run here
 exit 1
@@ -159,11 +152,16 @@ def get_dist_info():
                 if not name or not version:
                     continue
                 # noinspection PyTypeChecker
-                with open(egg_info_path / "installed-files.txt", "r") as f:
+                index_file: Any = egg_info_path / "installed-files.txt"
+                parent_path = egg_info_path
+                if not index_file.exists():
+                    index_file = egg_info_path / "SOURCES.txt"
+                    parent_path = path
+                with open(index_file, "r") as f:
                     for line in f:
                         file_name = line.strip()
                         if "__pycache__" not in file_name:
-                            abs_path = (egg_info_path / file_name).resolve()
+                            abs_path = (parent_path / file_name).resolve()
                             results[str(abs_path)] = (name, version)
             except (IOError, ValueError):
                 continue
@@ -185,7 +183,10 @@ def get_dist_info():
     return results
 
 
-def get_codes():
+def get_codes(code_path=""):
+    if code_path:
+        code_path = os.path.abspath(code_path)
+
     dist_info = get_dist_info()
     base64_file = Path(base64.__file__)
     stdlib_path = base64_file.parent
@@ -205,7 +206,10 @@ def get_codes():
             continue
 
         module_file = getattr(module, "__file__", None)
-        if not module_file or any(module_file.startswith(i) for i in stdlib_paths):
+        if not module_file or any(
+                module_file.startswith(i) and not module_file.startswith(
+                    os.path.join(i, "site-packages"))
+                for i in stdlib_paths):
             continue
 
         # ignore intellij pydev helper
@@ -214,10 +218,12 @@ def get_codes():
 
         dist_info_i = dist_info.get(module_file)
         if dist_info_i:
+            # 1. it's a pypi package
             pypi_name, pypi_version = dist_info_i
             module_sources[name] = ("version", pypi_name, pypi_version)
-        elif os.path.isfile(module_file):
+        elif os.path.isfile(module_file) and module_file.startswith(code_path):
             if module_file.endswith(".py"):
+                # 2. it's a python file
                 with open(module_file, "rb") as f:
                     source = f.read()
                 assets = getattr(module, "__assets__", None)
@@ -226,17 +232,18 @@ def get_codes():
                 else:
                     asset_sources = {}
                 module_sources[name] = ("source", source, module.__package__, module.__file__, asset_sources)
-            elif module_file.endswith(".so"):
-                # may be cython source
+            elif module_file.endswith(".so") and module.__package__ in sys.modules:
                 contents, asset_sources = get_cython_files(name, sys.modules[module.__package__].__path__)
-                if contents[0] is None:
+                if contents[0] is not None:
+                    # 3. it's a cython source code
+                    print(f"Storing cython source code of module {name}...")
+                    module_sources[name] = ("cython_source", contents, asset_sources)
+                else:
+                    # 4. it's a binary module
                     print(f"Cannot find source code of module {name}. "
                           "Storing its binary file...")
                     with open(module_file, "rb") as f:
                         module_sources[name] = ("binary_source", f.read(), module.__package__, module.__file__)
-                else:
-                    print(f"Storing cython source code of module {name}...")
-                    module_sources[name] = ("cython_source", contents, asset_sources)
 
     envir_info = {"modules": module_sources,
                   "system": {
