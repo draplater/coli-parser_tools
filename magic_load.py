@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import pickletools
 import sys
 import tempfile
 import pickle
@@ -7,6 +8,8 @@ import struct
 import base64
 from argparse import ArgumentParser
 from contextlib import contextmanager
+from types import ModuleType
+from typing import Any
 
 magic_header = b'#!/bin/sh\n# MAGIC_STRING = SUGAR_RUSH\nSCRIPT_SIZE='
 script_size_len = 12
@@ -30,13 +33,13 @@ def read_script(reader):
 
 def read_importer_and_source(reader):
     magic_importer_source, module_sources = pickle.load(reader)
-    importer_namespace = {}
-    exec(magic_importer_source, importer_namespace)
+    importer_namespace: Any = ModuleType("magic_import")
+    exec(magic_importer_source, importer_namespace.__dict__)
     return importer_namespace, module_sources
 
 
 def read_entrance(reader, importer_namespace, module_sources):
-    importer = importer_namespace["MagicPackImporter"](module_sources)
+    importer = importer_namespace.MagicPackImporter(module_sources)
     importer.install()
     entrance_class = pickle.load(reader)
     return entrance_class
@@ -47,7 +50,11 @@ def read_until_entrance(reader):
     return read_entrance(reader, importer_namespace, module_sources)
 
 
-def extract_codes(all_sources, importer_namespace, dest):
+def extract_codes(all_sources, dest, importer_namespace=None):
+    if importer_namespace is None:
+        import coli.parser_tools.magic_import as magic_import
+        importer_namespace = magic_import
+
     if not os.path.exists(dest):
         os.makedirs(dest)
     else:
@@ -66,15 +73,19 @@ def extract_codes(all_sources, importer_namespace, dest):
             package_path = os.path.join(dest, *package_name.split("."))
             if module_info[0] == "source":
                 source, original_package, original_file, assets = module_info[1:]
-                filename = importer_namespace["_path_split"](original_file)[1]
-                full_path = os.path.join(package_path, filename)
-                os.makedirs(package_path, exist_ok=True)
+                filename = importer_namespace._path_split(original_file)[1]
+                if filename == "__init__.py":
+                    path = os.path.join(package_path, module_name)
+                else:
+                    path = package_path
+                full_path = os.path.join(path, filename)
+                os.makedirs(path, exist_ok=True)
                 with open(full_path, "wb") as f:
                     f.write(source)
-                importer_namespace["restore_assets"](package_path, assets)
+                importer_namespace.restore_assets(path, assets)
             elif module_info[0] == "cython_source":
                 sources, assets = module_info[1:]
-                importer_namespace["extract_cython_files"](
+                importer_namespace.extract_cython_files(
                     dest, name, sources, assets)
             elif module_info[0] == "version":
                 pypi_name, pypi_version = module_info[1:]
@@ -135,7 +146,26 @@ class ArgParserShowUsage(ArgumentParser):
         super(ArgParserShowUsage, self).error(message)
 
 
-if __name__ == "__main__":
+def extract_codes_from_model(model_file, dest):
+    with open(model_file, "rb") as f:
+        read_script(f)
+        importer_namespace, envir_info = read_importer_and_source(f)
+        # read pickle protocol
+        next(pickletools.genops(f))
+        # read class name and module
+        class_op, class_op_args, _ = next(pickletools.genops(f))
+        assert class_op.code == "c", "Invalid model file"
+        entrance_module, entrance_class_name = class_op_args.split(" ")
+    # write codes
+    extract_codes(envir_info["modules"], dest, importer_namespace)
+    # write main script
+    with open(os.path.join(dest, "parser_.py"), "w") as f:
+        f.write("from {} import {}\n".format(
+            entrance_module, entrance_class_name))
+        f.write("{}.main()\n".format(entrance_class_name))
+
+
+def main():
     # this file can be inserted in to a shell script
     # and the "$xxx" will be replaced into real value
     model_file = "$0"
@@ -173,8 +203,8 @@ if __name__ == "__main__":
             remove_option(predict_subparser, "--model")
         args = predict_subparser.parse_args(rest_args)
         try:
+            # noinspection PyUnresolvedReferences
             from coli.basic_tools.dataclass_argparse import check_argparse_result
-
             check_argparse_result(args)
         except ImportError:
             pass
@@ -183,20 +213,20 @@ if __name__ == "__main__":
             args.model = model_file
             entrance_class.predict_with_parser(args)
     elif mode == "extract":
-        with open(model_file, "rb") as f:
-            read_script(f)
-            importer_namespace, envir_info = read_importer_and_source(f)
         extract_subparser = ArgumentParser("parser extract")
         extract_subparser.add_argument("dest",
                                        help="destination of extraction")
         args = extract_subparser.parse_args(rest_args)
-        extract_codes(envir_info["modules"], importer_namespace, args.dest)
+        extract_codes_from_model(model_file, args.dest)
     elif mode == "shell":
         with open(model_file, "rb") as f:
             read_script(f)
             entrance_class = read_until_entrance(f)
         import code
-
         code.interact(local={"Parser": entrance_class})
     else:
         print(f"Invalid mode {mode}")
+
+
+if __name__ == "__main__":
+    main()
