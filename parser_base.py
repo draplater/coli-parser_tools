@@ -21,6 +21,8 @@ from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArg
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 from coli.data_utils.dataset import DataFormatBase
+from coli.parser_tools.debug_console import debug_console_wrapper
+from coli.parser_tools.training_scheduler import parse_cmd_multistage
 
 DF = TypeVar("DF", bound=DataFormatBase)
 
@@ -122,7 +124,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         bilm_gpu: str = argfield("", predict_time=True,
                                  help="run elmo on these gpu")
         use_exception_handler: bool = argfield(
-            False, predict_time=True,
+            False, predict_default=True, predict_time=True,
             help="useful tools for quick debugging when encountering an error")
 
         # predict only
@@ -290,7 +292,8 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
             data_test = DataFormatClass.from_file(options.test, False)
         elif options.input_format == "space":
             with smart_open(options.test) as f:
-                data_test = [DataFormatClass.from_words_and_postags([(word, "X") for word in line.strip().split(" ")])
+                data_test = [DataFormatClass.from_words_and_postags(
+                    [(word if word else " ", "X") for word in line.strip().split("  ")])
                              for line in f]
         elif options.input_format.startswith("english"):
             from nltk import download, sent_tokenize
@@ -384,10 +387,11 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
 
     @classmethod
     def main(cls, argv=None):
-        from coli.parser_tools.training_scheduler import parse_cmd_multistage
-
         if argv is None:
             argv = sys.argv[1:]
         args = parse_cmd_multistage(cls, argv)
         check_argparse_result(args)
-        args.func(args)
+        if args.use_exception_handler:
+            debug_console_wrapper(args.func, args)
+        else:
+            args.func(args)
