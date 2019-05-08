@@ -144,6 +144,9 @@ class VersionPromptProxyLoader(object):
         self.check_version(self.pypi_name, self.pypi_version)
         return module
 
+    def get_data(self, path):
+        return self.original_loader.get_data(path)
+
 
 def get_pyx_loader():
     from pyximport import PyxLoader
