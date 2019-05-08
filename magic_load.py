@@ -219,8 +219,24 @@ def main():
         with open(model_file, "rb") as f:
             read_script(f)
             entrance_class = read_until_entrance(f)
-        import code
-        code.interact(local={"parser": entrance_class})
+        shell_subparser = ArgumentParser("parser shell")
+        entrance_class.add_predict_arguments(shell_subparser)
+        entrance_class.add_common_arguments(shell_subparser)
+        remove_option(shell_subparser, "--test")
+        remove_option(shell_subparser, "--output")
+        if model_file is not None:
+            remove_option(shell_subparser, "--model")
+        args = shell_subparser.parse_args(rest_args)
+        parser_class = entrance_class
+        parser = parser_class.load(model_file, args)
+        try:
+            import IPython
+            IPython.embed()
+        except ModuleNotFoundError:
+            import code
+            code.interact(local={"parser_class": parser_class,
+                                 "parser": parser,
+                                 "model_file": model_file})
     else:
         print(f"Invalid mode {mode}")
 
