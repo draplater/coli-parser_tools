@@ -232,18 +232,18 @@ def get_codes(code_path=""):
                 else:
                     asset_sources = {}
                 module_sources[name] = ("source", source, module.__package__, module.__file__, asset_sources)
-            elif module_file.endswith(".so") and module.__package__ in sys.modules:
-                contents, asset_sources = get_cython_files(name, sys.modules[module.__package__].__path__)
-                if contents[0] is not None:
-                    # 3. it's a cython source code
-                    print(f"Storing cython source code of module {name}...")
-                    module_sources[name] = ("cython_source", contents, asset_sources)
-                else:
-                    # 4. it's a binary module
-                    print(f"Cannot find source code of module {name}. "
-                          "Storing its binary file...")
-                    with open(module_file, "rb") as f:
-                        module_sources[name] = ("binary_source", f.read(), module.__package__, module.__file__)
+        elif module_file.endswith(".so") and module.__package__ in sys.modules:
+            contents, asset_sources = get_cython_files(name, sys.modules[module.__package__].__path__)
+            if contents[0] is not None:
+                # 3. it's a cython source code
+                print(f"Storing cython source code of module {name}...")
+                module_sources[name] = ("cython_source", contents, asset_sources)
+            elif module_file.startswith(code_path):
+                # 4. it's a binary module
+                print(f"Cannot find source code of module {name}. "
+                      "Storing its binary file...")
+                with open(module_file, "rb") as f:
+                    module_sources[name] = ("binary_source", f.read(), module.__package__, module.__file__)
 
     envir_info = {"modules": module_sources,
                   "system": {
