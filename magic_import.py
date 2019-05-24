@@ -10,7 +10,6 @@ from pathlib import Path
 from shutil import rmtree
 import subprocess
 
-
 logger = logging.getLogger('magic_import')
 
 
@@ -193,7 +192,7 @@ class MagicPackImporter(PathFinder):
                     pypi_name, pypi_version = module_info[-2:]
                     VersionPromptProxyLoader.check_version(pypi_name, pypi_version)
 
-        self.auto_install = False
+        self.auto_install = None
         self.pyx_loader_class = None
         self.enabled = True
 
@@ -227,18 +226,21 @@ class MagicPackImporter(PathFinder):
                 # this module is not installed
                 if default_spec is None:
                     result = None
-                    while not self.auto_install and result not in ("y", "n", "all"):
+                    while self.auto_install is None and result not in (
+                            "y", "n", "yes-all", "no-all"):
                         result = input(f"Package {pypi_name}({pypi_version}) is not installed. "
-                                       f"Do you want to pip install it now? (y/n/all)")
-                    if result == "all":
+                                       f"Do you want to pip install it now? (y/n/yes-all/no-all)")
+                    if result == "yes-all":
                         self.auto_install = True
-                    if self.auto_install or result == "y":
+                    elif result == "no-all":
+                        self.auto_install = False
+                    if self.auto_install is True or result == "y":
                         # some error may occur if run pip in current interpreter
                         subprocess.call(
                             [sys.executable, "-m", "pip", "install",
                              f"{pypi_name}=={pypi_version}", "--no-dependencies"]
                         )
-                    if result == "n":
+                    if self.auto_install is False or result == "n":
                         return None
                     default_spec = super(MagicPackImporter, self).find_spec(fullname, path, target)
                     # sometimes installation failed
