@@ -148,7 +148,10 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
 
     @classmethod
     def add_predict_arguments(cls, arg_parser):
-        DataClassArgParser("", arg_parser, {"default": cls.Options()}, mode="predict")
+        DataClassArgParser(
+            "", arg_parser,
+            {"default": cls.Options().to_predict_default()},
+            mode="predict")
 
     @classmethod
     def add_common_arguments(cls, arg_parser):
