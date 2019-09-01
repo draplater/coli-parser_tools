@@ -182,8 +182,9 @@ def main():
 
     arg_parser = ArgParserShowUsage("parser", add_help=False)
     add_alt_arguments(arg_parser)
-    arg_parser.add_argument("mode", choices=["predict", "extract", "shell"],
+    arg_parser.add_argument("mode", choices=["predict", "server", "extract", "shell"],
                             help="predict: predict with this model; "
+                                 "server: start predict server; "
                                  "extract: extract internal codes of this model;"
                                  "shell: start REPL in this environment")
     args, rest_args = arg_parser.parse_known_args(rest_args)
@@ -208,7 +209,19 @@ def main():
 
         if model_file is not None:
             args.model = model_file
-            entrance_class.predict_with_parser(args)
+        entrance_class.predict_with_parser(args)
+    elif mode == "server":
+        with open(model_file, "rb") as f:
+            read_script(f)
+            entrance_class = read_until_entrance(f)
+        server_subparser = ArgumentParser("parser server")
+        entrance_class.add_server_arguments(server_subparser)
+        if model_file is not None:
+            remove_option(server_subparser, "--model")
+        args = server_subparser.parse_args(rest_args)
+        if model_file is not None:
+            args.model = model_file
+        entrance_class.load_and_start_server(args)
     elif mode == "extract":
         extract_subparser = ArgumentParser("parser extract")
         extract_subparser.add_argument("dest",

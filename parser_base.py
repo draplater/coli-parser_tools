@@ -22,7 +22,10 @@ from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open,
 from coli.basic_tools.logger import get_logger, default_logger, log_to_file
 from coli.data_utils.dataset import DataFormatBase
 from coli.parser_tools.debug_console import debug_console_wrapper
+from coli.parser_tools.magic_load import remove_option
+from coli.parser_tools.magic_pack import get_codes
 from coli.parser_tools.training_scheduler import parse_cmd_multistage
+from coli.basic_tools.base_service import WebAPIService
 
 DF = TypeVar("DF", bound=DataFormatBase)
 
@@ -284,20 +287,23 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         return dev_output
 
     @classmethod
-    def predict_with_parser(cls, options):
+    def load_with_options(cls, options):
         default_logger.info('Loading Model...')
         options.is_train = False
         parser = cls.load(options.model, options)
         parser.logger.info('Model loaded')
+        return parser
 
+    @classmethod
+    def get_test_data(cls, parser, options):
         DataFormatClass = cls.get_data_formats()[parser.options.data_format]
         if options.input_format == "standard":
             data_test = DataFormatClass.from_file(options.test, False)
         elif options.input_format == "space":
             with smart_open(options.test) as f:
                 data_test = [DataFormatClass.from_words_and_postags(
-                    [(word if word else " ", "X") for word in line.strip().split("  ")])
-                             for line in f]
+                    [(word if word else " ", "X") for word in line.strip().split(" ")])
+                    for line in f]
         elif options.input_format.startswith("english"):
             from nltk import download, sent_tokenize
             from nltk.tokenize import TreebankWordTokenizer
@@ -319,13 +325,85 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
             data_test = [DataFormatClass.from_words_and_postags(item) for item in items]
         else:
             raise ValueError("invalid format option")
+        return data_test
 
+    def from_strings(self, inputs, input_format="standard"):
+        DataFormatClass = self.get_data_formats()[self.options.data_format]
+        if input_format == "standard":
+            data_test = [DataFormatClass.from_string(i) for i in inputs]
+        elif input_format == "words_and_postags":
+            data_test = [DataFormatClass.from_words_and_postags(
+                [(word if word else " ", "X") for word in words])
+                for words in inputs]
+        elif input_format == "words_and_postags":
+            data_test = [DataFormatClass.from_words_and_postags(i) for i in inputs]
+        elif input_format.startswith("english"):
+            from nltk import download, sent_tokenize
+            from nltk.tokenize import TreebankWordTokenizer
+            download("punkt")
+            tokenizer = TreebankWordTokenizer()
+            data_test = [
+                DataFormatClass.from_words_and_postags(
+                    [(token, "X") for token in tokenizer.tokenize(sent)])
+                for sent in inputs]
+        else:
+            raise ValueError("invalid format option")
+
+        return [i.to_string() for i in self.predict(data_test)]
+
+    def dispatch_service(self, base_service, name=None):
+        """
+        :type base_service: WebAPIService
+        """
+        if name is None:
+            name = self.__class__.__name__
+
+        from jsonrpc.backend.flask import JSONRPCAPI
+        parser_api = JSONRPCAPI()
+        parser_api.dispatcher.add_method(self.from_strings)
+
+        def view_func_wrap():
+            return parser_api.jsonrpc()
+
+        view_func_wrap.__name__ = name
+
+        base_service.add_url_rule(
+            "/api/" + name, view_func=view_func_wrap, methods=["POST"])
+
+    def start_server(self, name=None, host="0.0.0.0", port=9999):
+        service = WebAPIService(name=name or self.__class__.__name__)
+        self.dispatch_service(service, name)
+        service.run(host, port)
+
+    @classmethod
+    def load_and_start_server(cls, options):
+        parser = cls.load_with_options(options)
+        parser.logger.info("Starting Server...")
+        parser.start_server(options.api_name, options.host, options.port)
+
+    @classmethod
+    def add_server_arguments(cls, server_subparser):
+        cls.add_predict_arguments(server_subparser)
+        cls.add_common_arguments(server_subparser)
+        remove_option(server_subparser, "--test")
+        remove_option(server_subparser, "--output")
+        remove_option(server_subparser, "--eval")
+        server_subparser.add_argument("--api-name")
+        server_subparser.add_argument("--host", default="0.0.0.0")
+        server_subparser.add_argument("--port", type=int, default=9995)
+        server_subparser.set_defaults(func=cls.load_and_start_server)
+
+    @classmethod
+    def predict_with_parser(cls, options):
+        parser = cls.load_with_options(options)
         ts = time.time()
+        data_test = cls.get_test_data(parser, options)
         parser.write_result(options.output, parser.predict(data_test))
         te = time.time()
         parser.logger.info('Finished predicting and writing test. %.2f seconds.', te - ts)
 
         if options.eval:
+            DataFormatClass = cls.get_data_formats()[parser.options.data_format]
             DataFormatClass.evaluate_with_external_program(options.test,
                                                            options.output)
 
@@ -334,6 +412,12 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         parser = ArgumentParser(sys.argv[0])
         cls.fill_arg_parser(parser)
         return parser
+
+    @classmethod
+    def resave(cls, options):
+        parser = cls.load_with_options(options)
+        parser.codes = get_codes(os.path.join(os.path.dirname(__file__), "../"))
+        parser.save(options.output)
 
     @classmethod
     def fill_arg_parser(cls, parser):
@@ -352,6 +436,18 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         cls.add_predict_arguments(predict_subparser)
         cls.add_common_arguments(predict_subparser)
         predict_subparser.set_defaults(func=cls.predict_with_parser)
+
+        # Resave
+        resave_subparser = sub_parsers.add_parser("resave")
+        cls.add_predict_arguments(resave_subparser)
+        cls.add_common_arguments(resave_subparser)
+        remove_option(resave_subparser, "--test")
+        remove_option(resave_subparser, "--eval")
+        resave_subparser.set_defaults(func=cls.resave)
+
+        # Server
+        server_subparser = sub_parsers.add_parser("server")
+        cls.add_server_arguments(server_subparser)
 
         eval_subparser = sub_parsers.add_parser("eval")
         eval_subparser.add_argument("--data-format", dest="data_format",
