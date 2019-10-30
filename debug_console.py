@@ -74,13 +74,15 @@ def handle_exception(frames_and_linenos, exc=None, tb=None) -> HandlerResult:
             except SystemExit:
                 continue  # goto choice
         elif choice == "pdb":
-            import pdb
+            try:
+                import web_pdb as pdb
+            except ImportError:
+                import pdb
             if tb:
                 pdb.post_mortem(tb)
             else:
                 # TODO: still some bugs
-                debugger = pdb.Pdb()
-                debugger.set_trace()
+                pdb.set_trace()
         elif choice == "print_stack":
             traceback.print_list(traceback.StackSummary.extract(frames_and_linenos))
         elif choice == "print_local":
