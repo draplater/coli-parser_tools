@@ -6,16 +6,13 @@ from copy import deepcopy
 from logging import FileHandler
 
 from multiprocessing import Process, Lock
-from multiprocessing.pool import ThreadPool
 
 import os
 
 from dataclasses import is_dataclass
 
-from coli.basic_tools import common_utils
 from coli.basic_tools.dataclass_argparse import check_argparse_result, check_options
 from coli.basic_tools.logger import logger
-from coli.parser_tools.debug_console import debug_console_wrapper
 
 NO_RETURN = object()
 
@@ -81,11 +78,6 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
         with initializer_lock:
             initializer(options_dict)
 
-    if is_dataclass(options_dict):
-        use_exception_handler = options_dict.use_exception_handler
-    else:
-        use_exception_handler = options_dict.get("use-exception-handler")
-
     def parse_options_and_run():
         dep_parser_class = getattr(importlib.import_module(module_name), class_name)
         if is_dataclass(options_dict):
@@ -100,11 +92,7 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
             check_argparse_result(options)
         return func(options)
 
-    if use_exception_handler:
-        common_utils.cache_keeper = {}
-        return debug_console_wrapper(parse_options_and_run)
-    else:
-        return parse_options_and_run()
+    return parse_options_and_run()
 
 
 def async_raise(tid, excobj):

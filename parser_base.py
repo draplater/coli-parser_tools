@@ -1,4 +1,5 @@
 import argparse
+import functools
 import pickle
 import random
 from typing import Generic, TypeVar, Type, Dict, List, Optional, Iterable
@@ -16,6 +17,7 @@ import time
 
 from dataclasses import dataclass
 
+from coli.basic_tools import common_utils
 from coli.basic_tools.dataclass_argparse import REQUIRED, argfield, DataClassArgParser, check_argparse_result, \
     pretty_format, OptionsBase
 from coli.basic_tools.common_utils import set_proc_name, ensure_dir, smart_open, NoPickle, cache_result
@@ -28,6 +30,19 @@ from coli.parser_tools.training_scheduler import parse_cmd_multistage
 from coli.basic_tools.base_service import WebAPIService
 
 DF = TypeVar("DF", bound=DataFormatBase)
+
+
+def optional_run_with_debug_console(func):
+    @functools.wraps(func)
+    def wrapped(cls, options, *args, **kwargs):
+        if options.use_exception_handler:
+            if common_utils.cache_keeper is None:
+                common_utils.cache_keeper = {}
+            return debug_console_wrapper(func, cls, options, *args, **kwargs)
+        else:
+            return func(options, *args, **kwargs)
+
+    return wrapped
 
 
 class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
@@ -127,7 +142,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         bilm_gpu: str = argfield("", predict_time=True,
                                  help="run elmo on these gpu")
         use_exception_handler: bool = argfield(
-            False, predict_default=True, predict_time=True,
+            False, predict_default=False, predict_time=True,
             help="useful tools for quick debugging when encountering an error")
 
         # predict only
@@ -184,6 +199,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
                     f.write(output.to_string())
 
     @classmethod
+    @optional_run_with_debug_console
     def train_parser(cls, options, data_train=None, data_dev=None, data_test=None):
         if sys.platform.startswith("linux"):
             set_proc_name(options.title)
@@ -379,6 +395,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         server_subparser.set_defaults(func=cls.load_and_start_server)
 
     @classmethod
+    @optional_run_with_debug_console
     def predict_with_parser(cls, options):
         parser = cls.load_with_options(options)
         ts = time.time()
