@@ -68,7 +68,7 @@ def parse_dict_multistage(dep_parser_class, dic, prefix=()):
 def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
                     initializer_lock, mode="train", initializer=None):
     if mode == "train":
-        output = os.path.join(outdir_prefix, "model-" + title)
+        output = os.path.join(outdir_prefix, title)
         if is_dataclass(options_dict):
             options_dict.title = title
             options_dict.output = output
