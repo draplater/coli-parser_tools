@@ -33,9 +33,9 @@ def handle_exception(frames_and_linenos, exc=None, tb=None) -> HandlerResult:
 
         logger.info("PID: {}\n".format(os.getpid()))
         try:
-            with Timeout(600):
+            with Timeout(48 * 60 * 60):
                 input_cmd = input("What do you want to do?\n"
-                                  "(You have 10 minutes to decide.)\n"
+                                  "(You have 48 hours to decide.)\n"
                                   "reload - reload codes and retry\n"
                                   "console - keep exception stack and start a interactive console\n"
                                   "print_stack - print traceback frame summary\n"
