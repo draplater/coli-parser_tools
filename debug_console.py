@@ -33,7 +33,7 @@ def handle_exception(frames_and_linenos, exc=None, tb=None) -> HandlerResult:
 
         logger.info("PID: {}\n".format(os.getpid()))
         try:
-            with Timeout(300):
+            with Timeout(600):
                 input_cmd = input("What do you want to do?\n"
                                   "(You have 10 minutes to decide.)\n"
                                   "reload - reload codes and retry\n"
@@ -46,7 +46,7 @@ def handle_exception(frames_and_linenos, exc=None, tb=None) -> HandlerResult:
                                   ">> "
                                   )
         except TimeoutError:
-            input_cmd = "raise"
+            input_cmd = "continue"
         choice, _, args = input_cmd.partition(" ")
         if choice == "continue":
             return HandlerResult(False, False)
