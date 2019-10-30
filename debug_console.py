@@ -19,6 +19,11 @@ class HandlerResult(object):
     need_console: bool = False
 
 
+class HandlerPassthrough(Exception):
+    def __init__(self, handler_result):
+        self.handler_result = handler_result
+
+
 def handle_exception(frames_and_linenos, exc=None, tb=None) -> HandlerResult:
     while True:
         # save exc_info to variable to prevent future exception
@@ -105,7 +110,9 @@ def handle_keyboard_interrupt(sig_no, frame):
     frames.reverse()
     stack = traceback.StackSummary.extract(frames)
     traceback.print_list(stack)
-    handle_exception(frames)
+    result = handle_exception(frames)
+    if result.need_reload:
+        raise HandlerPassthrough(result)
 
 
 def debug_console_wrapper(func, *cmd_args, **kwargs):
@@ -162,6 +169,8 @@ def debug_console_wrapper(func, *cmd_args, **kwargs):
         # noinspection PyBroadException
         try:
             ret = func(*cmd_args, **kwargs)
+        except HandlerPassthrough as e:
+            handler_ret = e.handler_result
         except Exception:
             exc_info = sys.exc_info()
             # handle errors
