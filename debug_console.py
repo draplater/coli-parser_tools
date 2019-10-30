@@ -110,7 +110,11 @@ def handle_keyboard_interrupt(sig_no, frame):
     frames.reverse()
     stack = traceback.StackSummary.extract(frames)
     traceback.print_list(stack)
-    result = handle_exception(frames)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        result = handle_exception(frames)
+    finally:
+        signal.signal(signal.SIGINT, handle_keyboard_interrupt)
     if result.need_reload:
         raise HandlerPassthrough(result)
 
