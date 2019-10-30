@@ -168,8 +168,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         if getattr(self, "logger_timestamp", None) is None:
             self.logger_timestamp = int(time.time())
         return os.path.join(
-            options.output,
-            "{}_{}_train.log".format(options.title, self.logger_timestamp))
+            options.output, f"{self.logger_timestamp}_train.log")
 
     def get_logger(self, options, log_to_console=True, log_to_file=True):
         return get_logger(files=self.get_log_file(options) if log_to_file else None,
@@ -250,7 +249,6 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         for epoch in range(options.epochs):
             parser.logger.info('Starting epoch %d', epoch)
             random_obj.shuffle(data_train)
-            options.is_train = True
             parser.train(data_train)
 
             # save model and delete old model
@@ -262,7 +260,6 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
             parser.save(path)
 
             def predict(sentences, gold_file, output_file):
-                options.is_train = False
                 result_itr = parser.predict(sentences)
                 parser.write_result(output_file, result_itr)
                 DataFormatClass.evaluate_with_external_program(gold_file, output_file)
@@ -273,23 +270,11 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
 
     @classmethod
     def get_output_name(cls, out_dir, file_name, epoch):
-        try:
-            prefix, suffix = os.path.basename(file_name).rsplit(".", 1)
-        except ValueError:
-            prefix = os.path.basename(file_name)
-            suffix = ""
-        dev_output = os.path.join(
-            out_dir,
-            '{}_epoch_{}.{}'.format(
-                prefix,
-                (epoch + 1) if isinstance(epoch, (int, float)) else epoch,
-                suffix))
-        return dev_output
+        return f"{out_dir}/{epoch}.out"
 
     @classmethod
     def load_with_options(cls, options):
         default_logger.info('Loading Model...')
-        options.is_train = False
         parser = cls.load(options.model, options)
         parser.logger.info('Model loaded')
         return parser
@@ -331,7 +316,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         DataFormatClass = self.get_data_formats()[self.options.data_format]
         if input_format == "standard":
             data_test = [DataFormatClass.from_string(i) for i in inputs]
-        elif input_format == "words_and_postags":
+        elif input_format == "words":
             data_test = [DataFormatClass.from_words_and_postags(
                 [(word if word else " ", "X") for word in words])
                 for words in inputs]
@@ -416,7 +401,7 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
     @classmethod
     def resave(cls, options):
         parser = cls.load_with_options(options)
-        parser.codes = get_codes(os.path.join(os.path.dirname(__file__), "../"))
+        parser.codes = get_codes(os.path.join(os.path.dirname(__file__), "../../"))
         parser.save(options.output)
 
     @classmethod
@@ -426,10 +411,10 @@ class DependencyParserBase(Generic[DF], metaclass=ABCMeta):
         sub_parsers.dest = 'mode'
 
         # Train
-        train_subparser = sub_parsers.add_parser("train")
-        cls.add_parser_arguments(train_subparser)
-        cls.add_common_arguments(train_subparser)
-        train_subparser.set_defaults(func=cls.train_parser)
+        # train_subparser = sub_parsers.add_parser("train")
+        # cls.add_parser_arguments(train_subparser)
+        # cls.add_common_arguments(train_subparser)
+        # train_subparser.set_defaults(func=cls.train_parser)
 
         # Predict
         predict_subparser = sub_parsers.add_parser("predict")
