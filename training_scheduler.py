@@ -102,9 +102,9 @@ def lazy_run_parser(module_name, class_name, title, options_dict, outdir_prefix,
 
     if use_exception_handler:
         common_utils.cache_keeper = {}
-        debug_console_wrapper(parse_options_and_run)
+        return debug_console_wrapper(parse_options_and_run)
     else:
-        parse_options_and_run()
+        return parse_options_and_run()
 
 
 def async_raise(tid, excobj):
@@ -174,44 +174,16 @@ class LazyLoadTrainingScheduler(object):
                 process.terminate()
 
     def run(self):
-        pool = ThreadPool(1)
         for (title, outdir_prefix, mode), options_dict in self.all_options_and_outdirs.items():
             logger.info("Training " + title)
             if self.initializer is not None:
                 self.initializer(options_dict)
-            # run in a thread to handle KeyboardInterrupt
-            # result_obj = pool.apply_async(
-            #     lazy_run_parser,
-            #     (self.module_name, self.class_name, title,
-            #      options_dict, outdir_prefix, None, mode)
-            # )
-            ret = NO_RETURN
-            while ret is NO_RETURN:
-                try:
-                    ret = lazy_run_parser(self.module_name, self.class_name, title,
-                                          options_dict, outdir_prefix, None, mode)
-                    # ret = result_obj.get()
-                except KeyboardInterrupt:
-                    # handle keyboard interrupt
-                    while True:
-                        try:
-                            answer = input("Really exit ? (yes/no/restart)")
-                        except KeyboardInterrupt:
-                            continue
-                        if answer == "yes" or answer == "restart":
-                            async_raise(pool._pool[0].ident, KeyboardInterrupt)
-                            pool._pool[0].join()
-                            if answer == "yes":
-                                raise
-                            else:
-                                continue
-                        elif answer == "no":
-                            break
+            ret = lazy_run_parser(self.module_name, self.class_name, title,
+                                  options_dict, outdir_prefix, None, mode)
             for handler in logger.handlers:
                 if isinstance(handler, FileHandler):
                     logger.removeHandler(handler)
             logger.info("{} Done! result is {}".format(title, ret))
-        pool.terminate()
 
     def clear(self):
         self.all_options_and_outdirs = OrderedDict()
