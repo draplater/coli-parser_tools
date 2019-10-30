@@ -50,6 +50,8 @@ def read_entrance(reader, importer_namespace, module_sources):
 
 def read_until_entrance(reader):
     importer_namespace, module_sources = read_importer_and_source(reader)
+    if os.environ.get("MAGIC_DEBUGGING"):
+        import coli.parser_tools.magic_import as importer_namespace
     return read_entrance(reader, importer_namespace, module_sources)
 
 

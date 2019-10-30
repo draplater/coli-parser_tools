@@ -181,6 +181,17 @@ class MagicPackImporter(PathFinder):
                 print(f"{name} chages from {value} to {new_value}")
         self.module_sources = envir_info["modules"]
 
+        # solution for dummy packages, such as "google"
+        new_items = {}
+        for module_name, module_info in self.module_sources.items():
+            if module_info[0] == "version":
+                super_name = module_name
+                while "." in super_name:
+                    super_name = super_name.rsplit(".", 1)[0]
+                    if super_name not in self.module_sources:
+                        new_items[super_name] = module_info
+        self.module_sources.update(new_items)
+
         for name in sys.modules.keys():
             module_info = self.module_sources.get(name)
             if module_info:
@@ -225,7 +236,7 @@ class MagicPackImporter(PathFinder):
                 pypi_name, pypi_version = module_info[-2:]
                 # this module is not installed
                 if default_spec is None:
-                    result = None
+                    result = os.environ.get("AUTOPIP")
                     while self.auto_install is None and result not in (
                             "y", "n", "yes-all", "no-all"):
                         result = input(f"Package {pypi_name}({pypi_version}) is not installed. "
@@ -246,9 +257,10 @@ class MagicPackImporter(PathFinder):
                     # sometimes installation failed
                     if default_spec is None:
                         return None
-                loader = VersionPromptProxyLoader(
-                    fullname, default_spec.loader, *module_info[-2:])
-                default_spec.loader = loader
+                if default_spec.loader is not None:
+                    loader = VersionPromptProxyLoader(
+                        fullname, default_spec.loader, *module_info[-2:])
+                    default_spec.loader = loader
                 return default_spec
             if module_info[0] == "cython_source":
                 for importer in sys.meta_path:
