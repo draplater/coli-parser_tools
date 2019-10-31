@@ -40,7 +40,7 @@ def optional_run_with_debug_console(func):
                 common_utils.cache_keeper = {}
             return debug_console_wrapper(func, cls, options, *args, **kwargs)
         else:
-            return func(options, *args, **kwargs)
+            return func(cls, options, *args, **kwargs)
 
     return wrapped
 
